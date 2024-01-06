@@ -25,61 +25,51 @@
 ***************************************************************************
 */
 
-
-
-
-#ifndef WAVE_DIALOG_H
-#define WAVE_DIALOG_H
-
-
+#pragma once
+#pragma once
 
 #include <QApplication>
-#include <QObject>
 #include <QDialog>
 #include <QGridLayout>
-#include <QSlider>
-#include <QMenuBar>
 #include <QMenu>
+#include <QMenuBar>
+#include <QObject>
+#include <QSlider>
 
-#include "mainwindow.h"
 #include "global.h"
+#include "mainwindow.h"
 #include "wave_view.h"
 
-
-class UI_Mainwindow;
+class UiMainWindow;
 
 class WaveCurve;
 
-
-class UI_wave_window : public QDialog
-{
-  Q_OBJECT
+class UiWaveWindow : public QDialog {
+    Q_OBJECT
 
 public:
+    UiWaveWindow(struct DeviceSettings*, short* wBuf[MAX_CHNS], QWidget* parent = 0);
+    ~UiWaveWindow();
 
-  UI_wave_window(struct device_settings *, short *wbuf[MAX_CHNS], QWidget *parent=0);
-  ~UI_wave_window();
-
-  void set_wavslider(void);
+    void set_wavslider(void);
 
 private:
+    struct DeviceSettings* devParms;
 
-struct device_settings *devparms;
+    UiMainWindow* mainwindow;
 
-UI_Mainwindow *mainwindow;
+    QMenuBar* menubar;
 
-QMenuBar     *menubar;
+    QMenu *savemenu,
+        *helpmenu;
 
-QMenu        *savemenu,
-             *helpmenu;
+    QGridLayout* g_layout;
 
-QGridLayout *g_layout;
+    WaveCurve* wavcurve;
 
-WaveCurve *wavcurve;
+    QSlider* wavslider;
 
-QSlider *wavslider;
-
-QAction *former_page_act,
+    QAction *former_page_act,
         *shift_page_left_act,
         *shift_page_right_act,
         *next_page_act,
@@ -90,23 +80,16 @@ QAction *former_page_act,
 
 private slots:
 
-void wavslider_value_changed(int);
+    void wavslider_value_changed(int);
 
-void former_page();
-void shift_page_left();
-void shift_page_right();
-void next_page();
-void zoom_in();
-void zoom_out();
-void center_position();
-void center_trigger();
+    void former_page();
+    void shift_page_left();
+    void shift_page_right();
+    void next_page();
+    void zoom_in();
+    void zoom_out();
+    void center_position();
+    void center_trigger();
 
-void save_wi_buffer_to_edf();
-
+    void save_wi_Buffer_to_edf();
 };
-
-
-
-#endif
-
-

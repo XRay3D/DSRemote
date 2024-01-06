@@ -25,739 +25,634 @@
 ***************************************************************************
 */
 
+#include "mainwindow.h"
 
-#define SAV_MEM_BSZ    (250000)
+#define SAV_MEM_BSZ (250000)
 
+void UiMainWindow::saveScreenshot() {
+    int n;
 
+    char str[512], opath[MAX_PATHLEN];
 
-void UI_Mainwindow::save_screenshot()
-{
-  int n;
+    QPainter painter;
 
-  char str[512],
-       opath[MAX_PATHLEN];
+    QPainterPath path;
 
-  QPainter painter;
+    if(device == nullptr)
+        return;
 
-  QPainterPath path;
+    scrnTimer->stop();
 
-  if(device == NULL)
-  {
-    return;
-  }
+    scrnThread->wait();
 
-  scrn_timer->stop();
+    tmcWrite(":DISP:DATA?");
 
-  scrn_thread->wait();
+    SaveDataThread get_data_thrd(0);
 
-  tmc_write(":DISP:DATA?");
-
-  save_data_thread get_data_thrd(0);
-
-  QMessageBox w_msg_box;
-  w_msg_box.setIcon(QMessageBox::NoIcon);
-  w_msg_box.setText("Downloading data...");
-  w_msg_box.setStandardButtons(QMessageBox::Abort);
-
-  connect(&get_data_thrd, SIGNAL(finished()), &w_msg_box, SLOT(accept()));
-
-  get_data_thrd.start();
-
-  if(w_msg_box.exec() != QDialog::Accepted)
-  {
-    disconnect(&get_data_thrd, 0, 0, 0);
-    strlcpy(str, "Aborted by user.", 512);
-    goto OUT_ERROR;
-  }
-
-  disconnect(&get_data_thrd, 0, 0, 0);
-
-  n = get_data_thrd.get_num_bytes_rcvd();
-  if(n < 0)
-  {
-    strlcpy(str, "Can not read from device.", 512);
-    goto OUT_ERROR;
-  }
-
-  if(device->sz != SCRN_SHOT_BMP_SZ)
-  {
-    strlcpy(str, "Error, bitmap has wrong filesize\n", 512);
-    goto OUT_ERROR;
-  }
-
-  if(strncmp(device->buf, "BM", 2))
-  {
-    strlcpy(str, "Error, file is not a bitmap\n", 512);
-    goto OUT_ERROR;
-  }
-
-  memcpy(devparms.screenshot_buf, device->buf, SCRN_SHOT_BMP_SZ);
-
-  screenXpm.loadFromData((uchar *)(devparms.screenshot_buf), SCRN_SHOT_BMP_SZ);
-
-  if(devparms.modelserie == 1)
-  {
-    painter.begin(&screenXpm);
-#if QT_VERSION >= 0x050000
-    painter.setRenderHint(QPainter::Qt4CompatiblePainting, true);
-#endif
-
-    painter.fillRect(0, 0, 80, 29, Qt::black);
-
-    painter.setPen(Qt::white);
-
-    painter.drawText(5, 8, 65, 20, Qt::AlignCenter, devparms.modelname);
-
-    painter.end();
-  }
-  else if(devparms.modelserie == 6)
-    {
-      painter.begin(&screenXpm);
-#if QT_VERSION >= 0x050000
-      painter.setRenderHint(QPainter::Qt4CompatiblePainting, true);
-#endif
-
-      painter.fillRect(0, 0, 95, 29, QColor(48, 48, 48));
-
-      path.addRoundedRect(5, 5, 85, 20, 3, 3);
-
-      painter.fillPath(path, Qt::black);
-
-      painter.setPen(Qt::white);
-
-      painter.drawText(5, 5, 85, 20, Qt::AlignCenter, devparms.modelname);
-
-      painter.end();
-    }
-
-  if(devparms.screenshot_inv)
-  {
-    screenXpm.invertPixels(QImage::InvertRgb);
-  }
-
-  opath[0] = 0;
-  if(recent_savedir[0]!=0)
-  {
-    strlcpy(opath, recent_savedir, MAX_PATHLEN);
-    strlcat(opath, "/", MAX_PATHLEN);
-  }
-  strlcat(opath, "screenshot.png", MAX_PATHLEN);
-
-  strlcpy(opath, QFileDialog::getSaveFileName(this, "Save file", opath, "PNG files (*.png *.PNG)").toLocal8Bit().data(), MAX_PATHLEN);
-
-  if(!strcmp(opath, ""))
-  {
-    scrn_timer->start(devparms.screentimerival);
-
-    return;
-  }
-
-  get_directory_from_path(recent_savedir, opath, MAX_PATHLEN);
-
-  if(screenXpm.save(QString::fromLocal8Bit(opath), "PNG", 50) == false)
-  {
-    strlcpy(str, "Could not save file (unknown error)", 512);
-    goto OUT_ERROR;
-  }
-
-  scrn_timer->start(devparms.screentimerival);
-
-  return;
-
-OUT_ERROR:
-
-  if(get_data_thrd.isFinished() != true)
-  {
-    connect(&get_data_thrd, SIGNAL(finished()), &w_msg_box, SLOT(accept()));
-    w_msg_box.setText("Waiting for thread to finish, please wait...");
-    w_msg_box.exec();
-  }
-
-  scrn_timer->start(devparms.screentimerival);
-
-  QMessageBox msgBox;
-  msgBox.setIcon(QMessageBox::Critical);
-  msgBox.setText(str);
-  msgBox.exec();
-}
-
-
-void UI_Mainwindow::get_deep_memory_waveform(void)
-{
-  int i, k,
-      n=0,
-      chn,
-      chns=0,
-      bytes_rcvd=0,
-      mempnts,
-      yref[MAX_CHNS],
-      empty_buf;
-
-  char str[512];
-
-  short *wavbuf[MAX_CHNS];
-
-  QEventLoop ev_loop;
-
-  QMessageBox wi_msg_box;
-
-  save_data_thread get_data_thrd(0);
-
-  if(device == NULL)
-  {
-    return;
-  }
-
-  scrn_timer->stop();
-
-  scrn_thread->wait();
-
-  for(i=0; i<MAX_CHNS; i++)
-  {
-    wavbuf[i] = NULL;
-  }
-
-  mempnts = devparms.acquirememdepth;
-
-  QProgressDialog progress("Downloading data...", "Abort", 0, mempnts, this);
-  progress.setWindowModality(Qt::WindowModal);
-  progress.setMinimumDuration(0);
-
-  connect(&get_data_thrd, SIGNAL(finished()), &ev_loop, SLOT(quit()));
-
-  statusLabel->setText("Downloading data...");
-
-  for(i=0; i<MAX_CHNS; i++)
-  {
-    if(!devparms.chandisplay[i])
-    {
-      continue;
-    }
-
-    chns++;
-  }
-
-  if(!chns)
-  {
-    strlcpy(str, "No active channels.", 512);
-    goto OUT_ERROR;
-  }
-
-  if(mempnts < 1)
-  {
-    strlcpy(str, "Can not download waveform when memory depth is set to \"Auto\".", 512);
-    goto OUT_ERROR;
-  }
-
-  for(i=0; i<MAX_CHNS; i++)
-  {
-    if(!devparms.chandisplay[i])  // Download data only when channel is switched on
-    {
-      continue;
-    }
-
-    wavbuf[i] = (short *)malloc(mempnts * sizeof(short));
-    if(wavbuf[i] == NULL)
-    {
-      snprintf(str, 512, "Malloc error.  line %i file %s", __LINE__, __FILE__);
-      goto OUT_ERROR;
-    }
-  }
-
-  tmc_write(":STOP");
-
-  usleep(20000);
-
-  for(chn=0; chn<MAX_CHNS; chn++)
-  {
-    if(!devparms.chandisplay[chn])  // Download data only when channel is switched on
-    {
-      continue;
-    }
-
-    snprintf(str, 512, "Downloading channel %i waveform data...", chn + 1);
-    progress.setLabelText(str);
-
-    snprintf(str, 512, ":WAV:SOUR CHAN%i", chn + 1);
-
-    tmc_write(str);
-
-    tmc_write(":WAV:FORM BYTE");
-
-    usleep(20000);
-
-    tmc_write(":WAV:MODE RAW");
-
-    usleep(20000);
-
-    tmc_write(":WAV:YINC?");
-
-    usleep(20000);
-
-    tmc_read();
-
-    devparms.yinc[chn] = atof(device->buf);
-
-    if(devparms.yinc[chn] < 1e-6)
-    {
-      snprintf(str, 512, "Error, parameter \"YINC\" out of range: %e  line %i file %s", devparms.yinc[chn], __LINE__, __FILE__);
-      goto OUT_ERROR;
-    }
-
-    usleep(20000);
-
-    tmc_write(":WAV:YREF?");
-
-    usleep(20000);
-
-    tmc_read();
-
-    yref[chn] = atoi(device->buf);
-
-    if((yref[chn] < 1) || (yref[chn] > 255))
-    {
-      snprintf(str, 512, "Error, parameter \"YREF\" out of range: %i  line %i file %s", yref[chn], __LINE__, __FILE__);
-      goto OUT_ERROR;
-    }
-
-    usleep(20000);
-
-    tmc_write(":WAV:YOR?");
-
-    usleep(20000);
-
-    tmc_read();
-
-    devparms.yor[chn] = atoi(device->buf);
-
-    if((devparms.yor[chn] < -255) || (devparms.yor[chn] > 255))
-    {
-      snprintf(str, 512, "Error, parameter \"YOR\" out of range: %i  line %i file %s", devparms.yor[chn], __LINE__, __FILE__);
-      goto OUT_ERROR;
-    }
-
-    empty_buf = 0;
-
-    for(bytes_rcvd=0; bytes_rcvd<mempnts ;)
-    {
-      progress.setValue(bytes_rcvd);
-
-      if(progress.wasCanceled())
-      {
-        strlcpy(str, "Canceled", 512);
-        goto OUT_ERROR;
-      }
-
-      snprintf(str, 512, ":WAV:STAR %i",  bytes_rcvd + 1);
-
-      usleep(20000);
-
-      tmc_write(str);
-
-      if((bytes_rcvd + SAV_MEM_BSZ) > mempnts)
-      {
-        snprintf(str, 512, ":WAV:STOP %i", mempnts);
-      }
-      else
-      {
-        snprintf(str, 512, ":WAV:STOP %i", bytes_rcvd + SAV_MEM_BSZ);
-      }
-
-      usleep(20000);
-
-      tmc_write(str);
-
-      usleep(20000);
-
-      tmc_write(":WAV:DATA?");
-
-      get_data_thrd.start();
-
-      ev_loop.exec();
-
-      n = get_data_thrd.get_num_bytes_rcvd();
-      if(n < 0)
-      {
-        snprintf(str, 512, "Can not read from device.  line %i file %s", __LINE__, __FILE__);
-        goto OUT_ERROR;
-      }
-
-      if(n == 0)
-      {
-        snprintf(str, 512, "No waveform data available.");
-        goto OUT_ERROR;
-      }
-
-      printf("received %i bytes, total %i bytes\n", n, n + bytes_rcvd);
-
-      if(n > SAV_MEM_BSZ)
-      {
-        snprintf(str, 512, "Datablock too big for buffer: %i  line %i file %s", n, __LINE__, __FILE__);
-        goto OUT_ERROR;
-      }
-
-      if(n < 1)
-      {
-        if(empty_buf++ > 100)
-        {
-          break;
-        }
-      }
-      else
-      {
-        empty_buf = 0;
-      }
-
-      for(k=0; k<n; k++)
-      {
-        if((bytes_rcvd + k) >= mempnts)
-        {
-          break;
-        }
-
-        wavbuf[chn][bytes_rcvd + k] = ((int)(((unsigned char *)device->buf)[k]) - yref[chn] - devparms.yor[chn]) << 5;
-      }
-
-      bytes_rcvd += n;
-
-      if(bytes_rcvd >= mempnts)
-      {
-        break;
-      }
-    }
-
-    if(bytes_rcvd < mempnts)
-    {
-      snprintf(str, 512, "Download error.  line %i file %s", __LINE__, __FILE__);
-      goto OUT_ERROR;
-    }
-  }
-
-  progress.reset();
-
-  for(chn=0; chn<MAX_CHNS; chn++)
-  {
-    if(!devparms.chandisplay[chn])
-    {
-      continue;
-    }
-
-    snprintf(str, 512, ":WAV:SOUR CHAN%i", chn + 1);
-
-    usleep(20000);
-
-    tmc_write(str);
-
-    usleep(20000);
-
-    tmc_write(":WAV:MODE NORM");
-
-    usleep(20000);
-
-    tmc_write(":WAV:STAR 1");
-
-    if(devparms.modelserie == 1)
-    {
-      usleep(20000);
-
-      tmc_write(":WAV:STOP 1200");
-    }
-    else
-    {
-      usleep(20000);
-
-      tmc_write(":WAV:STOP 1400");
-
-      usleep(20000);
-
-      tmc_write(":WAV:POIN 1400");
-    }
-  }
-
-  if(bytes_rcvd < mempnts)
-  {
-    snprintf(str, 512, "Download error.  line %i file %s", __LINE__, __FILE__);
-    goto OUT_ERROR;
-  }
-  else
-  {
-    statusLabel->setText("Downloading finished");
-  }
-
-  new UI_wave_window(&devparms, wavbuf, this);
-
-  disconnect(&get_data_thrd, 0, 0, 0);
-
-  scrn_timer->start(devparms.screentimerival);
-
-  return;
-
-OUT_ERROR:
-
-  disconnect(&get_data_thrd, 0, 0, 0);
-
-  progress.reset();
-
-  statusLabel->setText("Downloading aborted");
-
-  if(get_data_thrd.isRunning() == true)
-  {
     QMessageBox w_msg_box;
     w_msg_box.setIcon(QMessageBox::NoIcon);
-    w_msg_box.setText("Waiting for thread to finish, please wait...");
+    w_msg_box.setText("Downloading data...");
     w_msg_box.setStandardButtons(QMessageBox::Abort);
 
     connect(&get_data_thrd, SIGNAL(finished()), &w_msg_box, SLOT(accept()));
 
-    w_msg_box.exec();
-  }
+    get_data_thrd.start();
 
-  if(progress.wasCanceled() == false)
-  {
+    if(w_msg_box.exec() != QDialog::Accepted) {
+        disconnect(&get_data_thrd, 0, 0, 0);
+        strlcpy(str, "Aborted by user.", 512);
+        goto OUT_ERROR;
+    }
+
+    disconnect(&get_data_thrd, 0, 0, 0);
+
+    n = get_data_thrd.get_num_bytes_rcvd();
+    if(n < 0) {
+        strlcpy(str, "Can not read from device.", 512);
+        goto OUT_ERROR;
+    }
+
+    if(device->sz != SCRN_SHOT_BMP_SZ) {
+        strlcpy(str, "Error, bitmap has wrong filesize\n", 512);
+        goto OUT_ERROR;
+    }
+
+    if(strncmp(device->buf, "BM", 2)) {
+        strlcpy(str, "Error, file is not a bitmap\n", 512);
+        goto OUT_ERROR;
+    }
+
+    memcpy(devParms.screenshotBuf, device->buf, SCRN_SHOT_BMP_SZ);
+
+    screenXpm.loadFromData((uchar*)(devParms.screenshotBuf), SCRN_SHOT_BMP_SZ);
+
+    if(devParms.modelSerie == 1) {
+        painter.begin(&screenXpm);
+        painter.fillRect(0, 0, 80, 29, Qt::black);
+        painter.setPen(Qt::white);
+        painter.drawText(5, 8, 65, 20, Qt::AlignCenter, devParms.modelName);
+        painter.end();
+    } else if(devParms.modelSerie == 6) {
+        painter.begin(&screenXpm);
+        painter.fillRect(0, 0, 95, 29, QColor(48, 48, 48));
+        path.addRoundedRect(5, 5, 85, 20, 3, 3);
+        painter.fillPath(path, Qt::black);
+        painter.setPen(Qt::white);
+        painter.drawText(5, 5, 85, 20, Qt::AlignCenter, devParms.modelName);
+        painter.end();
+    }
+
+    if(devParms.screenshotInv)
+        screenXpm.invertPixels(QImage::InvertRgb);
+
+    opath[0] = 0;
+    if(recentSaveDir[0] != 0) {
+        strlcpy(opath, recentSaveDir, MAX_PATHLEN);
+        strlcat(opath, "/", MAX_PATHLEN);
+    }
+    strlcat(opath, "screenshot.png", MAX_PATHLEN);
+
+    strlcpy(opath,
+        QFileDialog::getSaveFileName(this, "Save file", opath, "PNG files (*.png *.PNG)")
+            .toLocal8Bit()
+            .data(),
+        MAX_PATHLEN);
+
+    if(!strcmp(opath, "")) {
+        scrnTimer->start(devParms.screenTimerIval);
+
+        return;
+    }
+
+    getDirectoryFromPath(recentSaveDir, opath, MAX_PATHLEN);
+
+    if(screenXpm.save(QString::fromLocal8Bit(opath), "PNG", 50) == false) {
+        strlcpy(str, "Could not save file (unknown error)", 512);
+        goto OUT_ERROR;
+    }
+
+    scrnTimer->start(devParms.screenTimerIval);
+
+    return;
+
+OUT_ERROR:
+
+    if(get_data_thrd.isFinished() != true) {
+        connect(&get_data_thrd, SIGNAL(finished()), &w_msg_box, SLOT(accept()));
+        w_msg_box.setText("Waiting for thread to finish, please wait...");
+        w_msg_box.exec();
+    }
+
+    scrnTimer->start(devParms.screenTimerIval);
+
     QMessageBox msgBox;
     msgBox.setIcon(QMessageBox::Critical);
     msgBox.setText(str);
     msgBox.exec();
-  }
-
-  for(chn=0; chn<MAX_CHNS; chn++)
-  {
-    if(!devparms.chandisplay[chn])
-    {
-      continue;
-    }
-
-    snprintf(str, 512, ":WAV:SOUR CHAN%i", chn + 1);
-
-    tmc_write(str);
-
-    tmc_write(":WAV:MODE NORM");
-
-    tmc_write(":WAV:STAR 1");
-
-    if(devparms.modelserie == 1)
-    {
-      tmc_write(":WAV:STOP 1200");
-    }
-    else
-    {
-      tmc_write(":WAV:STOP 1400");
-
-      tmc_write(":WAV:POIN 1400");
-    }
-  }
-
-  for(chn=0; chn<MAX_CHNS; chn++)
-  {
-    free(wavbuf[chn]);
-    wavbuf[chn] = NULL;
-  }
-
-  scrn_timer->start(devparms.screentimerival);
 }
 
+void UiMainWindow::getDeepMemoryWaveform(void) {
+    int i, k, n = 0, chn, chns = 0, bytes_rcvd = 0, mempnts, yref[MAX_CHNS], empty_Buf;
 
-void UI_Mainwindow::save_wave_inspector_buffer_to_edf(struct device_settings *d_parms)
-{
-  int i, j,
-      chn,
-      chns=0,
-      hdl=-1,
-      mempnts,
-      smps_per_record,
-      datrecs=1,
-      ret_stat;
+    char str[512];
 
-  char str[512],
-       opath[MAX_PATHLEN];
+    short* wavBuf[MAX_CHNS];
 
-  long long rec_len=0LL,
-            datrecduration;
+    QEventLoop ev_loop;
 
-  QMessageBox wi_msg_box;
+    QMessageBox wi_msg_box;
 
-  save_data_thread sav_data_thrd(1);
+    SaveDataThread get_data_thrd(0);
 
-  mempnts = d_parms->acquirememdepth;
+    if(device == nullptr)
+        return;
 
-  smps_per_record = mempnts;
+    scrnTimer->stop();
 
-  for(i=0; i<MAX_CHNS; i++)
-  {
-    if(!d_parms->chandisplay[i])
-    {
-      continue;
+    scrnThread->wait();
+
+    for(int i{}; i < MAX_CHNS; i++)
+        wavBuf[i] = nullptr;
+
+    mempnts = devParms.acquirememdepth;
+
+    QProgressDialog progress("Downloading data...", "Abort", 0, mempnts, this);
+    progress.setWindowModality(Qt::WindowModal);
+    progress.setMinimumDuration(0);
+
+    connect(&get_data_thrd, SIGNAL(finished()), &ev_loop, SLOT(quit()));
+
+    statusLabel->setText("Downloading data...");
+
+    for(int i{}; i < MAX_CHNS; i++) {
+        if(!devParms.chanDisplay[i])
+            continue;
+
+        chns++;
     }
 
-    chns++;
-  }
-
-  if(!chns)
-  {
-    strlcpy(str, "No active channels.", 512);
-    goto OUT_ERROR;
-  }
-
-  while(smps_per_record >= (5000000 / chns))
-  {
-    smps_per_record /= 2;
-
-    datrecs *= 2;
-  }
-
-  rec_len = (EDFLIB_TIME_DIMENSION * (long long)mempnts) / d_parms->samplerate;
-
-  if(rec_len < 100)
-  {
-    strlcpy(str, "Can not save waveforms shorter than 10 uSec.\n"
-                "Select a higher memory depth or a higher timebase.", 512);
-    goto OUT_ERROR;
-  }
-
-  opath[0] = 0;
-  if(recent_savedir[0]!=0)
-  {
-    strlcpy(opath, recent_savedir, MAX_PATHLEN);
-    strlcat(opath, "/", MAX_PATHLEN);
-  }
-  strlcat(opath, "waveform.edf", MAX_PATHLEN);
-
-  strlcpy(opath, QFileDialog::getSaveFileName(this, "Save file", opath, "EDF files (*.edf *.EDF)").toLocal8Bit().data(), MAX_PATHLEN);
-
-  if(!strcmp(opath, ""))
-  {
-    goto OUT_NORMAL;
-  }
-
-  get_directory_from_path(recent_savedir, opath, MAX_PATHLEN);
-
-  hdl = edfopen_file_writeonly(opath, EDFLIB_FILETYPE_EDFPLUS, chns);
-  if(hdl < 0)
-  {
-    strlcpy(str, "Can not create EDF file.", 512);
-    goto OUT_ERROR;
-  }
-
-  statusLabel->setText("Saving EDF file...");
-
-  datrecduration = (rec_len / 10LL) / datrecs;
-
-//  printf("rec_len: %lli   datrecs: %i   datrecduration: %lli\n", rec_len, datrecs, datrecduration);
-
-  if(datrecduration < 10000LL)
-  {
-    if(edf_set_micro_datarecord_duration(hdl, datrecduration))
-    {
-      snprintf(str, 512, "Can not set datarecord duration of EDF file: %lli", datrecduration);
-      printf("\ndebug line %i: rec_len: %lli   datrecs: %i   datrecduration: %lli\n", __LINE__, rec_len, datrecs, datrecduration);
-      goto OUT_ERROR;
-    }
-  }
-  else
-  {
-    if(edf_set_datarecord_duration(hdl, datrecduration / 10LL))
-    {
-      snprintf(str, 512, "Can not set datarecord duration of EDF file: %lli", datrecduration);
-      printf("\ndebug line %i: rec_len: %lli   datrecs: %i   datrecduration: %lli\n", __LINE__, rec_len, datrecs, datrecduration);
-      goto OUT_ERROR;
-    }
-  }
-
-  j = 0;
-
-  for(chn=0; chn<MAX_CHNS; chn++)
-  {
-    if(!d_parms->chandisplay[chn])
-    {
-      continue;
+    if(!chns) {
+        strlcpy(str, "No active channels.", 512);
+        goto OUT_ERROR;
     }
 
-    edf_set_samplefrequency(hdl, j, smps_per_record);
-    edf_set_digital_maximum(hdl, j, 32767);
-    edf_set_digital_minimum(hdl, j, -32768);
-    if(d_parms->chanscale[chn] > 2)
-    {
-      edf_set_physical_maximum(hdl, j, d_parms->yinc[chn] * 32767.0 / 32.0);
-      edf_set_physical_minimum(hdl, j, d_parms->yinc[chn] * -32768.0 / 32.0);
-      edf_set_physical_dimension(hdl, j, "V");
+    if(mempnts < 1) {
+        strlcpy(str, "Can not download waveform when memory depth is set to \"Auto\".", 512);
+        goto OUT_ERROR;
     }
-    else
-    {
-      edf_set_physical_maximum(hdl, j, 1000.0 * d_parms->yinc[chn] * 32767.0 / 32.0);
-      edf_set_physical_minimum(hdl, j, 1000.0 * d_parms->yinc[chn] * -32768.0 / 32.0);
-      edf_set_physical_dimension(hdl, j, "mV");
+
+    for(int i{}; i < MAX_CHNS; i++) {
+        if(!devParms.chanDisplay[i]) // Download data only when channel is switched on
+            continue;
+
+        wavBuf[i] = (short*)malloc(mempnts * sizeof(short));
+        if(wavBuf[i] == nullptr) {
+            snprintf(str, 512, "Malloc error.  line %i file %s", __LINE__, __FILE__);
+            goto OUT_ERROR;
+        }
     }
-    snprintf(str, 512, "CHAN%i", chn + 1);
-    edf_set_label(hdl, j, str);
 
-    j++;
-  }
+    tmcWrite(":STOP");
 
-  edf_set_equipment(hdl, d_parms->modelname);
+    usleep(20000);
 
-//  printf("datrecs: %i    smps_per_record: %i\n", datrecs, smps_per_record);
+    for(chn = 0; chn < MAX_CHNS; chn++) {
+        if(!devParms.chanDisplay[chn]) // Download data only when channel is switched on
+            continue;
 
-  sav_data_thrd.init_save_memory_edf_file(d_parms, hdl, datrecs, smps_per_record, d_parms->wavebuf);
+        snprintf(str, 512, "Downloading channel %i waveform data...", chn + 1);
+        progress.setLabelText(str);
 
-  wi_msg_box.setIcon(QMessageBox::NoIcon);
-  wi_msg_box.setText("Saving EDF file ...");
-  wi_msg_box.setStandardButtons(QMessageBox::Abort);
+        snprintf(str, 512, ":WAV:SOUR CHAN%i", chn + 1);
 
-  connect(&sav_data_thrd, SIGNAL(finished()), &wi_msg_box, SLOT(accept()));
+        tmcWrite(str);
 
-  sav_data_thrd.start();
+        tmcWrite(":WAV:FORM BYTE");
 
-  ret_stat = wi_msg_box.exec();
+        usleep(20000);
 
-  if(ret_stat != QDialog::Accepted)
-  {
-    strlcpy(str, "Saving EDF file aborted.", 512);
-    goto OUT_ERROR;
-  }
+        tmcWrite(":WAV:MODE RAW");
 
-  if(sav_data_thrd.get_error_num())
-  {
-    sav_data_thrd.get_error_str(str, 512);
-    goto OUT_ERROR;
-  }
+        usleep(20000);
 
-OUT_NORMAL:
+        tmcWrite(":WAV:YINC?");
 
-  disconnect(&sav_data_thrd, 0, 0, 0);
+        usleep(20000);
 
-  if(hdl >= 0)
-  {
-    edfclose_file(hdl);
-  }
+        tmcRead();
 
-  if(!strcmp(opath, ""))
-  {
-    statusLabel->setText("Save file canceled.");
-  }
-  else
-  {
-    statusLabel->setText("Saved memory buffer to EDF file.");
-  }
+        devParms.yinc[chn] = atof(device->buf);
 
-  return;
+        if(devParms.yinc[chn] < 1e-6) {
+            snprintf(str,
+                512,
+                "Error, parameter \"YINC\" out of range: %e  line %i file %s",
+                devParms.yinc[chn],
+                __LINE__,
+                __FILE__);
+            goto OUT_ERROR;
+        }
+
+        usleep(20000);
+
+        tmcWrite(":WAV:YREF?");
+
+        usleep(20000);
+
+        tmcRead();
+
+        yref[chn] = atoi(device->buf);
+
+        if((yref[chn] < 1) || (yref[chn] > 255)) {
+            snprintf(str,
+                512,
+                "Error, parameter \"YREF\" out of range: %i  line %i file %s",
+                yref[chn],
+                __LINE__,
+                __FILE__);
+            goto OUT_ERROR;
+        }
+
+        usleep(20000);
+
+        tmcWrite(":WAV:YOR?");
+
+        usleep(20000);
+
+        tmcRead();
+
+        devParms.yor[chn] = atoi(device->buf);
+
+        if((devParms.yor[chn] < -255) || (devParms.yor[chn] > 255)) {
+            snprintf(str,
+                512,
+                "Error, parameter \"YOR\" out of range: %i  line %i file %s",
+                devParms.yor[chn],
+                __LINE__,
+                __FILE__);
+            goto OUT_ERROR;
+        }
+
+        empty_Buf = 0;
+
+        for(bytes_rcvd = 0; bytes_rcvd < mempnts;) {
+            progress.setValue(bytes_rcvd);
+
+            if(progress.wasCanceled()) {
+                strlcpy(str, "Canceled", 512);
+                goto OUT_ERROR;
+            }
+
+            snprintf(str, 512, ":WAV:STAR %i", bytes_rcvd + 1);
+
+            usleep(20000);
+
+            tmcWrite(str);
+
+            if((bytes_rcvd + SAV_MEM_BSZ) > mempnts)
+                snprintf(str, 512, ":WAV:STOP %i", mempnts);
+            else
+                snprintf(str, 512, ":WAV:STOP %i", bytes_rcvd + SAV_MEM_BSZ);
+
+            usleep(20000);
+
+            tmcWrite(str);
+
+            usleep(20000);
+
+            tmcWrite(":WAV:DATA?");
+
+            get_data_thrd.start();
+
+            ev_loop.exec();
+
+            n = get_data_thrd.get_num_bytes_rcvd();
+            if(n < 0) {
+                snprintf(str, 512, "Can not read from device.  line %i file %s", __LINE__, __FILE__);
+                goto OUT_ERROR;
+            }
+
+            if(n == 0) {
+                snprintf(str, 512, "No waveform data available.");
+                goto OUT_ERROR;
+            }
+
+            printf("received %i bytes, total %i bytes\n", n, n + bytes_rcvd);
+
+            if(n > SAV_MEM_BSZ) {
+                snprintf(str,
+                    512,
+                    "Datablock too big for buffer: %i  line %i file %s",
+                    n,
+                    __LINE__,
+                    __FILE__);
+                goto OUT_ERROR;
+            }
+
+            if(n < 1) {
+                if(empty_Buf++ > 100)
+                    break;
+            } else {
+                empty_Buf = 0;
+            }
+
+            for(k = 0; k < n; k++) {
+                if((bytes_rcvd + k) >= mempnts)
+                    break;
+
+                wavBuf[chn][bytes_rcvd + k]
+                    = ((int)(((unsigned char*)device->buf)[k]) - yref[chn] - devParms.yor[chn])
+                    << 5;
+            }
+
+            bytes_rcvd += n;
+
+            if(bytes_rcvd >= mempnts)
+                break;
+        }
+
+        if(bytes_rcvd < mempnts) {
+            snprintf(str, 512, "Download error.  line %i file %s", __LINE__, __FILE__);
+            goto OUT_ERROR;
+        }
+    }
+
+    progress.reset();
+
+    for(chn = 0; chn < MAX_CHNS; chn++) {
+        if(!devParms.chanDisplay[chn])
+            continue;
+
+        snprintf(str, 512, ":WAV:SOUR CHAN%i", chn + 1);
+
+        usleep(20000);
+
+        tmcWrite(str);
+
+        usleep(20000);
+
+        tmcWrite(":WAV:MODE NORM");
+
+        usleep(20000);
+
+        tmcWrite(":WAV:STAR 1");
+
+        if(devParms.modelSerie == 1) {
+            usleep(20000);
+
+            tmcWrite(":WAV:STOP 1200");
+        } else {
+            usleep(20000);
+
+            tmcWrite(":WAV:STOP 1400");
+
+            usleep(20000);
+
+            tmcWrite(":WAV:POIN 1400");
+        }
+    }
+
+    if(bytes_rcvd < mempnts) {
+        snprintf(str, 512, "Download error.  line %i file %s", __LINE__, __FILE__);
+        goto OUT_ERROR;
+    } else {
+        statusLabel->setText("Downloading finished");
+    }
+
+    new UiWaveWindow(&devParms, wavBuf, this);
+
+    disconnect(&get_data_thrd, 0, 0, 0);
+
+    scrnTimer->start(devParms.screenTimerIval);
+
+    return;
 
 OUT_ERROR:
 
-  disconnect(&sav_data_thrd, 0, 0, 0);
+    disconnect(&get_data_thrd, 0, 0, 0);
 
-  statusLabel->setText("Saving file aborted.");
+    progress.reset();
 
-  if(hdl >= 0)
-  {
-    edfclose_file(hdl);
-  }
+    statusLabel->setText("Downloading aborted");
 
-  wi_msg_box.setIcon(QMessageBox::Critical);
-  wi_msg_box.setText(str);
-  wi_msg_box.setStandardButtons(QMessageBox::Ok);
-  wi_msg_box.exec();
+    if(get_data_thrd.isRunning() == true) {
+        QMessageBox w_msg_box;
+        w_msg_box.setIcon(QMessageBox::NoIcon);
+        w_msg_box.setText("Waiting for thread to finish, please wait...");
+        w_msg_box.setStandardButtons(QMessageBox::Abort);
+
+        connect(&get_data_thrd, SIGNAL(finished()), &w_msg_box, SLOT(accept()));
+
+        w_msg_box.exec();
+    }
+
+    if(progress.wasCanceled() == false) {
+        QMessageBox msgBox;
+        msgBox.setIcon(QMessageBox::Critical);
+        msgBox.setText(str);
+        msgBox.exec();
+    }
+
+    for(chn = 0; chn < MAX_CHNS; chn++) {
+        if(!devParms.chanDisplay[chn])
+            continue;
+
+        snprintf(str, 512, ":WAV:SOUR CHAN%i", chn + 1);
+
+        tmcWrite(str);
+
+        tmcWrite(":WAV:MODE NORM");
+
+        tmcWrite(":WAV:STAR 1");
+
+        if(devParms.modelSerie == 1) {
+            tmcWrite(":WAV:STOP 1200");
+        } else {
+            tmcWrite(":WAV:STOP 1400");
+
+            tmcWrite(":WAV:POIN 1400");
+        }
+    }
+
+    for(chn = 0; chn < MAX_CHNS; chn++) {
+        free(wavBuf[chn]);
+        wavBuf[chn] = nullptr;
+    }
+
+    scrnTimer->start(devParms.screenTimerIval);
 }
 
+void UiMainWindow::saveWaveInspectorBufferToEdf(struct DeviceSettings* d_parms) {
+    int i, j, chn, chns = 0, hdl = -1, mempnts, smps_per_record, datrecs = 1, ret_stat;
+
+    char str[512], opath[MAX_PATHLEN];
+
+    long long rec_len = 0LL, datrecduration;
+
+    QMessageBox wi_msg_box;
+
+    SaveDataThread sav_data_thrd(1);
+
+    mempnts = d_parms->acquirememdepth;
+
+    smps_per_record = mempnts;
+
+    for(int i{}; i < MAX_CHNS; i++) {
+        if(!d_parms->chanDisplay[i])
+            continue;
+
+        chns++;
+    }
+
+    if(!chns) {
+        strlcpy(str, "No active channels.", 512);
+        goto OUT_ERROR;
+    }
+
+    while(smps_per_record >= (5000000 / chns)) {
+        smps_per_record /= 2;
+
+        datrecs *= 2;
+    }
+
+    rec_len = (EDFLIB_TIME_DIMENSION * (long long)mempnts) / d_parms->samplerate;
+
+    if(rec_len < 100) {
+        strlcpy(str,
+            "Can not save waveforms shorter than 10 uSec.\n"
+            "Select a higher memory depth or a higher timebase.",
+            512);
+        goto OUT_ERROR;
+    }
+
+    opath[0] = 0;
+    if(recentSaveDir[0] != 0) {
+        strlcpy(opath, recentSaveDir, MAX_PATHLEN);
+        strlcat(opath, "/", MAX_PATHLEN);
+    }
+    strlcat(opath, "waveform.edf", MAX_PATHLEN);
+
+    strlcpy(opath,
+        QFileDialog::getSaveFileName(this, "Save file", opath, "EDF files (*.edf *.EDF)")
+            .toLocal8Bit()
+            .data(),
+        MAX_PATHLEN);
+
+    if(!strcmp(opath, ""))
+        goto OUT_NORMAL;
+
+    getDirectoryFromPath(recentSaveDir, opath, MAX_PATHLEN);
+
+    hdl = edfopen_file_writeonly(opath, EDFLIB_FILETYPE_EDFPLUS, chns);
+    if(hdl < 0) {
+        strlcpy(str, "Can not create EDF file.", 512);
+        goto OUT_ERROR;
+    }
+
+    statusLabel->setText("Saving EDF file...");
+
+    datrecduration = (rec_len / 10LL) / datrecs;
+
+    //  printf("rec_len: %lli   datrecs: %i   datrecduration: %lli\n", rec_len, datrecs, datrecduration);
+
+    if(datrecduration < 10000LL) {
+        if(edf_set_micro_datarecord_duration(hdl, datrecduration)) {
+            snprintf(str, 512, "Can not set datarecord duration of EDF file: %lli", datrecduration);
+            printf("\ndebug line %i: rec_len: %lli   datrecs: %i   datrecduration: %lli\n",
+                __LINE__,
+                rec_len,
+                datrecs,
+                datrecduration);
+            goto OUT_ERROR;
+        }
+    } else if(edf_set_datarecord_duration(hdl, datrecduration / 10LL)) {
+        snprintf(str, 512, "Can not set datarecord duration of EDF file: %lli", datrecduration);
+        printf("\ndebug line %i: rec_len: %lli   datrecs: %i   datrecduration: %lli\n",
+            __LINE__,
+            rec_len,
+            datrecs,
+            datrecduration);
+        goto OUT_ERROR;
+    }
+
+    j = 0;
+
+    for(chn = 0; chn < MAX_CHNS; chn++) {
+        if(!d_parms->chanDisplay[chn])
+            continue;
+
+        edf_set_samplefrequency(hdl, j, smps_per_record);
+        edf_set_digital_maximum(hdl, j, 32767);
+        edf_set_digital_minimum(hdl, j, -32768);
+        if(d_parms->chanscale[chn] > 2) {
+            edf_set_physical_maximum(hdl, j, d_parms->yinc[chn] * 32767.0 / 32.0);
+            edf_set_physical_minimum(hdl, j, d_parms->yinc[chn] * -32768.0 / 32.0);
+            edf_set_physical_dimension(hdl, j, "V");
+        } else {
+            edf_set_physical_maximum(hdl, j, 1000.0 * d_parms->yinc[chn] * 32767.0 / 32.0);
+            edf_set_physical_minimum(hdl, j, 1000.0 * d_parms->yinc[chn] * -32768.0 / 32.0);
+            edf_set_physical_dimension(hdl, j, "mV");
+        }
+        snprintf(str, 512, "CHAN%i", chn + 1);
+        edf_set_label(hdl, j, str);
+
+        j++;
+    }
+
+    edf_set_equipment(hdl, d_parms->modelName);
+
+    //  printf("datrecs: %i    smps_per_record: %i\n", datrecs, smps_per_record);
+
+    sav_data_thrd.init_save_memory_edf_file(d_parms, hdl, datrecs, smps_per_record, d_parms->waveBuf);
+
+    wi_msg_box.setIcon(QMessageBox::NoIcon);
+    wi_msg_box.setText("Saving EDF file ...");
+    wi_msg_box.setStandardButtons(QMessageBox::Abort);
+
+    connect(&sav_data_thrd, SIGNAL(finished()), &wi_msg_box, SLOT(accept()));
+
+    sav_data_thrd.start();
+
+    ret_stat = wi_msg_box.exec();
+
+    if(ret_stat != QDialog::Accepted) {
+        strlcpy(str, "Saving EDF file aborted.", 512);
+        goto OUT_ERROR;
+    }
+
+    if(sav_data_thrd.get_error_num()) {
+        sav_data_thrd.get_error_str(str, 512);
+        goto OUT_ERROR;
+    }
+
+OUT_NORMAL:
+
+    disconnect(&sav_data_thrd, 0, 0, 0);
+
+    if(hdl >= 0)
+        edfclose_file(hdl);
+
+    if(!strcmp(opath, ""))
+        statusLabel->setText("Save file canceled.");
+    else
+        statusLabel->setText("Saved memory buffer to EDF file.");
+
+    return;
+
+OUT_ERROR:
+
+    disconnect(&sav_data_thrd, 0, 0, 0);
+
+    statusLabel->setText("Saving file aborted.");
+
+    if(hdl >= 0)
+        edfclose_file(hdl);
+
+    wi_msg_box.setIcon(QMessageBox::Critical);
+    wi_msg_box.setText(str);
+    wi_msg_box.setStandardButtons(QMessageBox::Ok);
+    wi_msg_box.exec();
+}
 
 //     tmc_write(":WAV:PRE?");
 //
@@ -794,330 +689,274 @@ OUT_ERROR:
 
 //     rec_len = wfp.xincrement[i] * wfp.points;
 
+void UiMainWindow::saveScreenWaveform() {
+    int i, j, n = 0, chn, chns = 0, hdl = -1, yref[MAX_CHNS];
 
+    char str[512], opath[MAX_PATHLEN];
 
+    short* wavBuf[MAX_CHNS];
 
+    long long rec_len = 0LL;
 
-void UI_Mainwindow::save_screen_waveform()
-{
-  int i, j,
-      n=0,
-      chn,
-      chns=0,
-      hdl=-1,
-      yref[MAX_CHNS];
+    if(device == nullptr)
+        return;
 
-  char str[512],
-       opath[MAX_PATHLEN];
+    for(int i{}; i < MAX_CHNS; i++)
+        wavBuf[i] = nullptr;
 
-  short *wavbuf[MAX_CHNS];
+    SaveDataThread get_data_thrd(0);
 
-  long long rec_len=0LL;
+    QMessageBox w_msg_box;
+    w_msg_box.setIcon(QMessageBox::NoIcon);
+    w_msg_box.setText("Downloading data...");
+    w_msg_box.setStandardButtons(QMessageBox::Abort);
 
-  if(device == NULL)
-  {
-    return;
-  }
+    scrnTimer->stop();
 
-  for(i=0; i<MAX_CHNS; i++)
-  {
-    wavbuf[i] = NULL;
-  }
+    scrnThread->wait();
 
-  save_data_thread get_data_thrd(0);
-
-  QMessageBox w_msg_box;
-  w_msg_box.setIcon(QMessageBox::NoIcon);
-  w_msg_box.setText("Downloading data...");
-  w_msg_box.setStandardButtons(QMessageBox::Abort);
-
-  scrn_timer->stop();
-
-  scrn_thread->wait();
-
-  if(devparms.timebasedelayenable)
-  {
-    rec_len = EDFLIB_TIME_DIMENSION * devparms.timebasedelayscale * devparms.hordivisions;
-  }
-  else
-  {
-    rec_len = EDFLIB_TIME_DIMENSION * devparms.timebasescale * devparms.hordivisions;
-  }
-
-  if(rec_len < 10LL)
-  {
-    strlcpy(str, "Can not save waveforms when timebase < 1uSec.", 512);
-    goto OUT_ERROR;
-  }
-
-  for(chn=0; chn<MAX_CHNS; chn++)
-  {
-    if(!devparms.chandisplay[chn])  // Download data only when channel is switched on
-    {
-      continue;
-    }
-
-    wavbuf[chn] = (short *)malloc(WAVFRM_MAX_BUFSZ * sizeof(short));
-    if(wavbuf[chn] == NULL)
-    {
-      strlcpy(str, "Malloc error.", 512);
-      goto OUT_ERROR;
-    }
-
-    chns++;
-  }
-
-  if(!chns)
-  {
-    strlcpy(str, "No active channels.", 512);
-    goto OUT_ERROR;
-  }
-
-  for(chn=0; chn<MAX_CHNS; chn++)
-  {
-    if(!devparms.chandisplay[chn])  // Download data only when channel is switched on
-    {
-      continue;
-    }
-
-    usleep(20000);
-
-    snprintf(str, 512, ":WAV:SOUR CHAN%i", chn + 1);
-
-    tmc_write(str);
-
-    usleep(20000);
-
-    tmc_write(":WAV:FORM BYTE");
-
-    usleep(20000);
-
-    tmc_write(":WAV:MODE NORM");
-
-    usleep(20000);
-
-    tmc_write(":WAV:YINC?");
-
-    usleep(20000);
-
-    tmc_read();
-
-    devparms.yinc[chn] = atof(device->buf);
-
-    if(devparms.yinc[chn] < 1e-6)
-    {
-      snprintf(str, 512, "Error, parameter \"YINC\" out of range: %e  line %i file %s", devparms.yinc[chn], __LINE__, __FILE__);
-      goto OUT_ERROR;
-    }
-
-    usleep(20000);
-
-    tmc_write(":WAV:YREF?");
-
-    usleep(20000);
-
-    tmc_read();
-
-    yref[chn] = atoi(device->buf);
-
-    if((yref[chn] < 1) || (yref[chn] > 255))
-    {
-      snprintf(str, 512, "Error, parameter \"YREF\" out of range: %i  line %i file %s", yref[chn], __LINE__, __FILE__);
-      goto OUT_ERROR;
-    }
-
-    usleep(20000);
-
-    tmc_write(":WAV:YOR?");
-
-    usleep(20000);
-
-    tmc_read();
-
-    devparms.yor[chn] = atoi(device->buf);
-
-    if((devparms.yor[chn] < -255) || (devparms.yor[chn] > 255))
-    {
-      snprintf(str, 512, "Error, parameter \"YOR\" out of range: %i  line %i file %s", devparms.yor[chn], __LINE__, __FILE__);
-      goto OUT_ERROR;
-    }
-
-    usleep(20000);
-
-    tmc_write(":WAV:DATA?");
-
-    connect(&get_data_thrd, SIGNAL(finished()), &w_msg_box, SLOT(accept()));
-
-    get_data_thrd.start();
-
-    if(w_msg_box.exec() != QDialog::Accepted)
-    {
-      disconnect(&get_data_thrd, 0, 0, 0);
-      strlcpy(str, "Aborted by user.", 512);
-      goto OUT_ERROR;
-    }
-
-    disconnect(&get_data_thrd, 0, 0, 0);
-
-    n = get_data_thrd.get_num_bytes_rcvd();
-    if(n < 0)
-    {
-      strlcpy(str, "Can not read from device.", 512);
-      goto OUT_ERROR;
-    }
-
-    if(n > WAVFRM_MAX_BUFSZ)
-    {
-      snprintf(str, 512, "Datablock too big for buffer: %i", n);
-      goto OUT_ERROR;
-    }
-
-    if(n < 16)
-    {
-      strlcpy(str, "Not enough data in buffer.", 512);
-      goto OUT_ERROR;
-    }
-
-    for(i=0; i<n; i++)
-    {
-      wavbuf[chn][i] = ((int)(((unsigned char *)device->buf)[i]) - yref[chn] - devparms.yor[chn]) << 5;
-    }
-  }
-
-  opath[0] = 0;
-  if(recent_savedir[0]!=0)
-  {
-    strlcpy(opath, recent_savedir, MAX_PATHLEN);
-    strlcat(opath, "/", MAX_PATHLEN);
-  }
-  strlcat(opath, "waveform.edf", MAX_PATHLEN);
-
-  strlcpy(opath, QFileDialog::getSaveFileName(this, "Save file", opath, "EDF files (*.edf *.EDF)").toLocal8Bit().data(), MAX_PATHLEN);
-
-  if(!strcmp(opath, ""))
-  {
-    goto OUT_NORMAL;
-  }
-
-  get_directory_from_path(recent_savedir, opath, MAX_PATHLEN);
-
-  hdl = edfopen_file_writeonly(opath, EDFLIB_FILETYPE_EDFPLUS, chns);
-  if(hdl < 0)
-  {
-    strlcpy(str, "Can not create EDF file.", 512);
-    goto OUT_ERROR;
-  }
-
-  if(edf_set_datarecord_duration(hdl, rec_len / 100LL))
-  {
-    snprintf(str, 512, "Can not set datarecord duration of EDF file: %lli", rec_len / 100LL);
-    goto OUT_ERROR;
-  }
-
-  j = 0;
-
-  for(chn=0; chn<MAX_CHNS; chn++)
-  {
-    if(!devparms.chandisplay[chn])
-    {
-      continue;
-    }
-
-    edf_set_samplefrequency(hdl, j, n);
-    edf_set_digital_maximum(hdl, j, 32767);
-    edf_set_digital_minimum(hdl, j, -32768);
-    if(devparms.chanscale[chn] > 2)
-    {
-      edf_set_physical_maximum(hdl, j, devparms.yinc[chn] * 32767.0 / 32.0);
-      edf_set_physical_minimum(hdl, j, devparms.yinc[chn] * -32768.0 / 32.0);
-      edf_set_physical_dimension(hdl, j, "V");
-    }
+    if(devParms.timebasedelayenable)
+        rec_len = EDFLIB_TIME_DIMENSION * devParms.timebasedelayscale * devParms.horDivisions;
     else
-    {
-      edf_set_physical_maximum(hdl, j, 1000.0 * devparms.yinc[chn] * 32767.0 / 32.0);
-      edf_set_physical_minimum(hdl, j, 1000.0 * devparms.yinc[chn] * -32768.0 / 32.0);
-      edf_set_physical_dimension(hdl, j, "mV");
-    }
-    snprintf(str, 512, "CHAN%i", chn + 1);
-    edf_set_label(hdl, j, str);
+        rec_len = EDFLIB_TIME_DIMENSION * devParms.timebasescale * devParms.horDivisions;
 
-    j++;
-  }
-
-  edf_set_equipment(hdl, devparms.modelname);
-
-  for(chn=0; chn<MAX_CHNS; chn++)
-  {
-    if(!devparms.chandisplay[chn])
-    {
-      continue;
+    if(rec_len < 10LL) {
+        strlcpy(str, "Can not save waveforms when timebase < 1uSec.", 512);
+        goto OUT_ERROR;
     }
 
-    if(edfwrite_digital_short_samples(hdl, wavbuf[chn]))
-    {
-      strlcpy(str, "A write error occurred.", 512);
-      goto OUT_ERROR;
+    for(chn = 0; chn < MAX_CHNS; chn++) {
+        if(!devParms.chanDisplay[chn]) // Download data only when channel is switched on
+            continue;
+
+        wavBuf[chn] = (short*)malloc(WAVFRM_MAX_BUFSZ * sizeof(short));
+        if(wavBuf[chn] == nullptr) {
+            strlcpy(str, "Malloc error.", 512);
+            goto OUT_ERROR;
+        }
+
+        chns++;
     }
-  }
+
+    if(!chns) {
+        strlcpy(str, "No active channels.", 512);
+        goto OUT_ERROR;
+    }
+
+    for(chn = 0; chn < MAX_CHNS; chn++) {
+        if(!devParms.chanDisplay[chn]) // Download data only when channel is switched on
+            continue;
+
+        usleep(20000);
+
+        snprintf(str, 512, ":WAV:SOUR CHAN%i", chn + 1);
+
+        tmcWrite(str);
+
+        usleep(20000);
+
+        tmcWrite(":WAV:FORM BYTE");
+
+        usleep(20000);
+
+        tmcWrite(":WAV:MODE NORM");
+
+        usleep(20000);
+
+        tmcWrite(":WAV:YINC?");
+
+        usleep(20000);
+
+        tmcRead();
+
+        devParms.yinc[chn] = atof(device->buf);
+
+        if(devParms.yinc[chn] < 1e-6) {
+            snprintf(str,
+                512,
+                "Error, parameter \"YINC\" out of range: %e  line %i file %s",
+                devParms.yinc[chn],
+                __LINE__,
+                __FILE__);
+            goto OUT_ERROR;
+        }
+
+        usleep(20000);
+
+        tmcWrite(":WAV:YREF?");
+
+        usleep(20000);
+
+        tmcRead();
+
+        yref[chn] = atoi(device->buf);
+
+        if((yref[chn] < 1) || (yref[chn] > 255)) {
+            snprintf(str,
+                512,
+                "Error, parameter \"YREF\" out of range: %i  line %i file %s",
+                yref[chn],
+                __LINE__,
+                __FILE__);
+            goto OUT_ERROR;
+        }
+
+        usleep(20000);
+
+        tmcWrite(":WAV:YOR?");
+
+        usleep(20000);
+
+        tmcRead();
+
+        devParms.yor[chn] = atoi(device->buf);
+
+        if((devParms.yor[chn] < -255) || (devParms.yor[chn] > 255)) {
+            snprintf(str,
+                512,
+                "Error, parameter \"YOR\" out of range: %i  line %i file %s",
+                devParms.yor[chn],
+                __LINE__,
+                __FILE__);
+            goto OUT_ERROR;
+        }
+
+        usleep(20000);
+
+        tmcWrite(":WAV:DATA?");
+
+        connect(&get_data_thrd, SIGNAL(finished()), &w_msg_box, SLOT(accept()));
+
+        get_data_thrd.start();
+
+        if(w_msg_box.exec() != QDialog::Accepted) {
+            disconnect(&get_data_thrd, 0, 0, 0);
+            strlcpy(str, "Aborted by user.", 512);
+            goto OUT_ERROR;
+        }
+
+        disconnect(&get_data_thrd, 0, 0, 0);
+
+        n = get_data_thrd.get_num_bytes_rcvd();
+        if(n < 0) {
+            strlcpy(str, "Can not read from device.", 512);
+            goto OUT_ERROR;
+        }
+
+        if(n > WAVFRM_MAX_BUFSZ) {
+            snprintf(str, 512, "Datablock too big for buffer: %i", n);
+            goto OUT_ERROR;
+        }
+
+        if(n < 16) {
+            strlcpy(str, "Not enough data in buffer.", 512);
+            goto OUT_ERROR;
+        }
+
+        for(int i{}; i < n; i++)
+            wavBuf[chn][i]
+                = ((int)(((unsigned char*)device->buf)[i]) - yref[chn] - devParms.yor[chn]) << 5;
+    }
+
+    opath[0] = 0;
+    if(recentSaveDir[0] != 0) {
+        strlcpy(opath, recentSaveDir, MAX_PATHLEN);
+        strlcat(opath, "/", MAX_PATHLEN);
+    }
+    strlcat(opath, "waveform.edf", MAX_PATHLEN);
+
+    strlcpy(opath,
+        QFileDialog::getSaveFileName(this, "Save file", opath, "EDF files (*.edf *.EDF)")
+            .toLocal8Bit()
+            .data(),
+        MAX_PATHLEN);
+
+    if(!strcmp(opath, ""))
+        goto OUT_NORMAL;
+
+    getDirectoryFromPath(recentSaveDir, opath, MAX_PATHLEN);
+
+    hdl = edfopen_file_writeonly(opath, EDFLIB_FILETYPE_EDFPLUS, chns);
+    if(hdl < 0) {
+        strlcpy(str, "Can not create EDF file.", 512);
+        goto OUT_ERROR;
+    }
+
+    if(edf_set_datarecord_duration(hdl, rec_len / 100LL)) {
+        snprintf(str, 512, "Can not set datarecord duration of EDF file: %lli", rec_len / 100LL);
+        goto OUT_ERROR;
+    }
+
+    j = 0;
+
+    for(chn = 0; chn < MAX_CHNS; chn++) {
+        if(!devParms.chanDisplay[chn])
+            continue;
+
+        edf_set_samplefrequency(hdl, j, n);
+        edf_set_digital_maximum(hdl, j, 32767);
+        edf_set_digital_minimum(hdl, j, -32768);
+        if(devParms.chanscale[chn] > 2) {
+            edf_set_physical_maximum(hdl, j, devParms.yinc[chn] * 32767.0 / 32.0);
+            edf_set_physical_minimum(hdl, j, devParms.yinc[chn] * -32768.0 / 32.0);
+            edf_set_physical_dimension(hdl, j, "V");
+        } else {
+            edf_set_physical_maximum(hdl, j, 1000.0 * devParms.yinc[chn] * 32767.0 / 32.0);
+            edf_set_physical_minimum(hdl, j, 1000.0 * devParms.yinc[chn] * -32768.0 / 32.0);
+            edf_set_physical_dimension(hdl, j, "mV");
+        }
+        snprintf(str, 512, "CHAN%i", chn + 1);
+        edf_set_label(hdl, j, str);
+
+        j++;
+    }
+
+    edf_set_equipment(hdl, devParms.modelName);
+
+    for(chn = 0; chn < MAX_CHNS; chn++) {
+        if(!devParms.chanDisplay[chn])
+            continue;
+
+        if(edfwrite_digital_short_samples(hdl, wavBuf[chn])) {
+            strlcpy(str, "A write error occurred.", 512);
+            goto OUT_ERROR;
+        }
+    }
 
 OUT_NORMAL:
 
-  if(hdl >= 0)
-  {
-    edfclose_file(hdl);
-  }
+    if(hdl >= 0)
+        edfclose_file(hdl);
 
-  for(chn=0; chn<MAX_CHNS; chn++)
-  {
-    free(wavbuf[chn]);
-    wavbuf[chn] = NULL;
-  }
+    for(chn = 0; chn < MAX_CHNS; chn++) {
+        free(wavBuf[chn]);
+        wavBuf[chn] = nullptr;
+    }
 
-  scrn_timer->start(devparms.screentimerival);
+    scrnTimer->start(devParms.screenTimerIval);
 
-  return;
+    return;
 
 OUT_ERROR:
 
-  if(get_data_thrd.isFinished() != true)
-  {
-    connect(&get_data_thrd, SIGNAL(finished()), &w_msg_box, SLOT(accept()));
-    w_msg_box.setText("Waiting for thread to finish, please wait...");
-    w_msg_box.exec();
-  }
+    if(get_data_thrd.isFinished() != true) {
+        connect(&get_data_thrd, SIGNAL(finished()), &w_msg_box, SLOT(accept()));
+        w_msg_box.setText("Waiting for thread to finish, please wait...");
+        w_msg_box.exec();
+    }
 
-  QMessageBox msgBox;
-  msgBox.setIcon(QMessageBox::Critical);
-  msgBox.setText(str);
-  msgBox.exec();
+    QMessageBox msgBox;
+    msgBox.setIcon(QMessageBox::Critical);
+    msgBox.setText(str);
+    msgBox.exec();
 
-  if(hdl >= 0)
-  {
-    edfclose_file(hdl);
-  }
+    if(hdl >= 0)
+        edfclose_file(hdl);
 
-  for(chn=0; chn<MAX_CHNS; chn++)
-  {
-    free(wavbuf[chn]);
-    wavbuf[chn] = NULL;
-  }
+    for(chn = 0; chn < MAX_CHNS; chn++) {
+        free(wavBuf[chn]);
+        wavBuf[chn] = nullptr;
+    }
 
-  scrn_timer->start(devparms.screentimerival);
+    scrnTimer->start(devParms.screenTimerIval);
 }
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-

@@ -25,86 +25,46 @@
 ***************************************************************************
 */
 
-
 #include "connection.h"
+#include "tmc_dev.h"
+#include "tmclan.h"
 
+int tmcConnectionType;
 
+struct tmcDev* tmcDevice;
 
-int tmc_connection_type;
-
-struct tmcdev *tmc_device;
-
-
-
-struct tmcdev * tmc_open_usb(const char *device)
-{
-  tmc_connection_type = 0;
-
-  tmc_device = tmcdev_open(device);
-
-  return tmc_device;
+struct tmcDev* tmcOpenUsb(const char* device) {
+    tmcConnectionType = 0;
+    tmcDevice = tmcDevOpen(device);
+    return tmcDevice;
 }
 
-
-struct tmcdev * tmc_open_lan(const char *address)
-{
-  tmc_connection_type = 1;
-
-  tmc_device =  tmclan_open(address);
-
-  return tmc_device;
+struct tmcDev* tmcOpenLan(const char* address) {
+    tmcConnectionType = 1;
+    tmcDevice = tmcLanOpen(address);
+    return tmcDevice;
 }
 
-
-void tmc_close(void)
-{
-  if(tmc_connection_type == 0)
-  {
-    tmcdev_close(tmc_device);
-  }
-  else
-  {
-    tmclan_close(tmc_device);
-  }
-
-  tmc_device = NULL;
+void tmcClose(void) {
+    if(tmcConnectionType == 0)
+        tmcDevClose(tmcDevice);
+    else
+        tmcLanClose(tmcDevice);
+    tmcDevice = nullptr;
 }
 
-
-int tmc_write(const char *cmd)
-{
-  if(tmc_connection_type == 0)
-  {
-    return tmcdev_write(tmc_device, cmd);
-  }
-  else
-  {
-    return tmclan_write(tmc_device, cmd);
-  }
-
-  return -1;
+int tmcWrite(const char* cmd) {
+    if(tmcConnectionType == 0)
+        return tmcDevWrite(tmcDevice, cmd);
+    else
+        return tmcLanWrite(tmcDevice, cmd);
+    return -1;
 }
 
-
-int tmc_read(void)
-{
-  if(tmc_connection_type == 0)
-  {
-    return tmcdev_read(tmc_device);
-  }
-  else
-  {
-    return tmclan_read(tmc_device);
-  }
-
-  return -1;
+int tmcRead(void) {
+    if(tmcConnectionType == 0)
+        return tmcDevRead(tmcDevice);
+    else
+        return tmcLanRead(tmcDevice);
+    return -1;
 }
-
-
-
-
-
-
-
-
-

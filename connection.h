@@ -25,32 +25,12 @@
 ***************************************************************************
 */
 
+#pragma once
 
-#ifndef DSR_CONNECTION_H
-#define DSR_CONNECTION_H
+struct tmcDev;
 
-#include <stdio.h>
-#include <stdlib.h>
-#include <string.h>
-#include <locale.h>
-#include <time.h>
-#include <sys/types.h>
-#include <sys/stat.h>
-#include <unistd.h>
-
-#include "global.h"
-#include "tmc_dev.h"
-#include "tmc_lan.h"
-#include "utils.h"
-
-
-struct tmcdev * tmc_open_usb(const char *);
-void tmc_close(void);
-int tmc_write(const char *);
-int tmc_read(void);
-struct tmcdev * tmc_open_lan(const char *);
-
-
-
-#endif
-
+struct tmcDev* tmcOpenUsb(const char*);
+struct tmcDev* tmcOpenLan(const char*);
+void tmcClose(void);
+int tmcWrite(const char*);
+int tmcRead(void);

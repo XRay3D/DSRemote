@@ -25,10 +25,7 @@
 ***************************************************************************
 */
 
-
-#ifndef DEF_READ_SETTINGS_THREAD_H
-#define DEF_READ_SETTINGS_THREAD_H
-
+#pragma once
 
 #include <stdio.h>
 #include <stdlib.h>
@@ -38,61 +35,30 @@
 #include <QObject>
 #include <QThread>
 
-#include "global.h"
-#include "utils.h"
 #include "connection.h"
+#include "global.h"
 #include "tmc_dev.h"
+#include "utils.h"
 
-
-
-class read_settings_thread : public QThread
-{
-  Q_OBJECT
+class ReadSettingsThread : public QThread {
+    Q_OBJECT
 
 public:
+    ReadSettingsThread();
 
-  read_settings_thread();
-
-  void set_device(struct tmcdev *);
-  void set_devparm_ptr(struct device_settings *);
-  int get_error_num(void);
-  void get_error_str(char *, int);
-  void set_delay(int);
+    void setDevice(struct tmcDev*);
+    void setDevparmPtr(struct DeviceSettings*);
+    int getErrorNum(void);
+    void getErrorStr(char*, int);
+    void setDelay(int);
 
 private:
+    struct tmcDev* device;
+    struct DeviceSettings* devParms;
 
-  struct tmcdev *device;
-  struct device_settings *devparms;
+    char errStr[4096];
 
-  char err_str[4096];
+    int errNum, delay;
 
-  int err_num, delay;
-
-  void run();
+    void run();
 };
-
-
-
-#endif
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-

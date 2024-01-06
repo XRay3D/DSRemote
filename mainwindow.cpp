@@ -25,2962 +25,1908 @@
 ***************************************************************************
 */
 
-
 #include "mainwindow.h"
-#include "mainwindow_constr.cpp"
-#include "timer_handlers.cpp"
-#include "save_data.cpp"
-#include "interface.cpp"
-#include "serial_decoder.cpp"
+// #include "interface.cpp"
+// #include "mainwindowConstr.cpp"
+// #include "saveData.cpp"
+// #include "serialDecoder.cpp"
+// #include "timerHandlers.cpp"
 
-
-
-void UI_Mainwindow::open_settings_dialog()
-{
-  UI_settings_window settings(this);
+void UiMainWindow::openSettingsDialog() {
+    UiSettingsWindow settings{this};
 }
 
-
-void UI_Mainwindow::open_connection()
-{
-  int i, j, n, len;
-
-  char str[4096] = {""},
-       dev_str[256] = {""},
-       resp_str[2048] = {""},
-       *ptr;
-
-  QSettings settings;
-
-  QMessageBox msgBox;
-
-  lan_connect_thread lan_cn_thrd;
-
-  if(device != NULL)
-  {
-    return;
-  }
-
-  if(devparms.connected)
-  {
-    return;
-  }
-
-  strlcpy(str, settings.value("connection/type", "USB").toString().toLatin1().data(), 4096);
-
-  if(!strcmp(str, "LAN"))
-  {
-    devparms.connectiontype = 1;
-  }
-  else
-  {
-    devparms.connectiontype = 0;
-  }
-
-  if(devparms.connectiontype == 0)  // USB
-  {
-    strlcpy(dev_str, settings.value("connection/device", "/dev/usbtmc0").toString().toLatin1().data(), 256);
-
-    if(!strcmp(dev_str, ""))
-    {
-      strlcpy(dev_str, "/dev/usbtmc0", 256);
-
-      settings.setValue("connection/device", dev_str);
-    }
-
-    device = tmc_open_usb(dev_str);
-    if(device == NULL)
-    {
-      snprintf(str, 4096, "Can not open device %s", dev_str);
-      goto OC_OUT_ERROR;
-    }
-  }
-
-  if(devparms.connectiontype == 1)  // LAN
-  {
-    strlcpy(devparms.hostname, settings.value("connection/hostname", "").toString().toLatin1().data(), 128);
-
-    if(strlen(devparms.hostname))
-    {
-      strlcpy(dev_str, devparms.hostname, 256);
-    }
+void UiMainWindow::openConnection() {
+    int i, j, n, len;
+    char str[4096] = {""}, devStr[256] = {""}, respStr[2048] = {""},
+         *ptr;
+    QSettings settings;
+    QMessageBox msgBox;
+    LanConnectThread lanCnThrd;
+    if(device != nullptr)
+        return;
+    if(devParms.connected)
+        return;
+    strlcpy(str, settings.value("connection/type", "USB").toString().toLatin1().data(), 4096);
+    if(!strcmp(str, "LAN"))
+        devParms.connectionType = 1;
     else
+        devParms.connectionType = 0;
+    if(devParms.connectionType == 0) // USB
     {
-      strlcpy(dev_str, settings.value("connection/ip", "192.168.1.100").toString().toLatin1().data(), 256);
-
-      if(!strcmp(dev_str, ""))
-      {
-        snprintf(str, 4096, "No IP address or hostname set");
-        goto OC_OUT_ERROR;
-      }
-
-      len = strlen(dev_str);
-
-      if(len < 7)
-      {
-        snprintf(str, 4096, "No IP address set");
-        goto OC_OUT_ERROR;
-      }
-
-      int cf = 0;
-
-      for(i=0; i<len; i++)
-      {
-        if(dev_str[i] == '.')
-        {
-          cf = 0;
+        strlcpy(devStr,
+            settings.value("connection/device", "/dev/usbtmc0").toString().toLatin1().data(),
+            256);
+        if(!strcmp(devStr, "")) {
+            strlcpy(devStr, "/dev/usbtmc0", 256);
+            settings.setValue("connection/device", QByteArray{devStr});
         }
 
-        if(dev_str[i] == '0')
-        {
-          if(cf == 0)
-          {
-            if((dev_str[i+1] != 0) && (dev_str[i+1] != '.'))
-            {
-              for(j=i; j<len; j++)
-              {
-                dev_str[j] = dev_str[j+1];
-              }
+        device = tmcOpenUsb(devStr);
+        if(device == nullptr) {
+            snprintf(str, 4096, "Can not open device %s", devStr);
+            goto OC_OUT_ERROR;
+        }
+    }
 
-              i--;
-
-              len--;
+    if(devParms.connectionType == 1) // LAN
+    {
+        strlcpy(devParms.hostName,
+            settings.value("connection/hostname", "").toString().toLatin1().data(),
+            128);
+        if(strlen(devParms.hostName)) {
+            strlcpy(devStr, devParms.hostName, 256);
+        } else {
+            strlcpy(devStr,
+                settings.value("connection/ip", "192.168.1.100").toString().toLatin1().data(),
+                256);
+            if(!strcmp(devStr, "")) {
+                snprintf(str, 4096, "No IP address or hostname set");
+                goto OC_OUT_ERROR;
             }
-          }
+
+            len = strlen(devStr);
+            if(len < 7) {
+                snprintf(str, 4096, "No IP address set");
+                goto OC_OUT_ERROR;
+            }
+
+            int cf = 0;
+            for(int i{}; i < len; i++) {
+                if(devStr[i] == '.')
+                    cf = 0;
+                if(devStr[i] == '0') {
+                    if(cf == 0) {
+                        if((devStr[i + 1] != 0) && (devStr[i + 1] != '.')) {
+                            for(j = i; j < len; j++)
+                                devStr[j] = devStr[j + 1];
+                            i--;
+                            len--;
+                        }
+                    }
+                } else {
+                    if(devStr[i] != '.')
+                        cf = 1;
+                }
+            }
         }
-        else
-        {
-          if(dev_str[i] != '.')
-          {
-            cf = 1;
-          }
+
+        statusLabel->setText("Trying to connect...");
+        snprintf(str, 4096, "Trying to connect to %s", devStr);
+        msgBox.setIcon(QMessageBox::NoIcon);
+        msgBox.setText(str);
+        msgBox.addButton("Abort", QMessageBox::RejectRole);
+        lanCnThrd.setDeviceAddress(devStr);
+        connect(&lanCnThrd, &QThread::finished, &msgBox, &QMessageBox::accept);
+        lanCnThrd.start();
+        if(msgBox.exec() != QDialog::Accepted) {
+            statusLabel->setText("Connection aborted");
+            lanCnThrd.terminate();
+            lanCnThrd.wait(20000);
+            snprintf(str, 4096, "Connection aborted");
+            disconnect(&lanCnThrd, 0, 0, 0);
+            goto OC_OUT_ERROR;
         }
-      }
+
+        disconnect(&lanCnThrd, 0, 0, 0);
+        device = lanCnThrd.getDevice();
+        if(device == nullptr) {
+            statusLabel->setText("Connection failed");
+            snprintf(str, 4096, "Can not open connection to %s", devStr);
+            goto OC_OUT_ERROR;
+        }
     }
 
-    statusLabel->setText("Trying to connect...");
-
-    snprintf(str, 4096, "Trying to connect to %s", dev_str);
-
-    msgBox.setIcon(QMessageBox::NoIcon);
-    msgBox.setText(str);
-    msgBox.addButton("Abort", QMessageBox::RejectRole);
-
-    lan_cn_thrd.set_device_address(dev_str);
-    connect(&lan_cn_thrd, SIGNAL(finished()), &msgBox, SLOT(accept()));
-    lan_cn_thrd.start();
-
-    if(msgBox.exec() != QDialog::Accepted)
+    if(tmcWrite("*IDN?") != 5)
+    //  if(tmcWrite("*IDN?;:SYST:ERR?") != 16)  // This is a fix for the broken *IDN? command in older fw version
     {
-      statusLabel->setText("Connection aborted");
-      lan_cn_thrd.terminate();
-      lan_cn_thrd.wait(20000);
-      snprintf(str, 4096, "Connection aborted");
-      disconnect(&lan_cn_thrd, 0, 0, 0);
-      goto OC_OUT_ERROR;
+        snprintf(str, 4096, "Can not write to device %s", devStr);
+        goto OC_OUT_ERROR;
     }
 
-    disconnect(&lan_cn_thrd, 0, 0, 0);
-
-    device = lan_cn_thrd.get_device();
-    if(device == NULL)
-    {
-      statusLabel->setText("Connection failed");
-      snprintf(str, 4096, "Can not open connection to %s", dev_str);
-      goto OC_OUT_ERROR;
+    n = tmcRead();
+    if(n < 0) {
+        snprintf(str, 4096, "Can not read from device %s", devStr);
+        goto OC_OUT_ERROR;
     }
-  }
 
-  if(tmc_write("*IDN?") != 5)
-//  if(tmc_write("*IDN?;:SYST:ERR?") != 16)  // This is a fix for the broken *IDN? command in older fw version
-  {
-    snprintf(str, 4096, "Can not write to device %s", dev_str);
-    goto OC_OUT_ERROR;
-  }
-
-  n = tmc_read();
-
-  if(n < 0)
-  {
-    snprintf(str, 4096, "Can not read from device %s", dev_str);
-    goto OC_OUT_ERROR;
-  }
-
-  devparms.channel_cnt = 0;
-
-  devparms.bandwidth = 0;
-
-  devparms.modelname[0] = 0;
-
-  strlcpy(resp_str, device->buf, 1024);
-
-  ptr = strtok(resp_str, ",");
-  if(ptr == NULL)
-  {
-    snprintf(str, 1024, "Received an unknown identification string from device:\n\n%s\n ", device->buf);
-    goto OC_OUT_ERROR;
-  }
-
-  if(strcmp(ptr, "RIGOL TECHNOLOGIES"))
-  {
-    snprintf(str, 1024, "Received an unknown identification string from device:\n\n%s\n ", device->buf);
-    goto OC_OUT_ERROR;
-  }
-
-  ptr = strtok(NULL, ",");
-  if(ptr == NULL)
-  {
-    snprintf(str, 1024, "Received an unknown identification string from device:\n\n%s\n ", device->buf);
-    goto OC_OUT_ERROR;
-  }
-
-  get_device_model(ptr);
-
-  if((!devparms.channel_cnt) || (!devparms.bandwidth))
-  {
-    snprintf(str, 1024, "Received an unknown identification string from device:\n\n%s\n ", device->buf);
-    goto OC_OUT_ERROR;
-  }
-
-  ptr = strtok(NULL, ",");
-  if(ptr == NULL)
-  {
-    snprintf(str, 1024, "Received an unknown identification string from device:\n\n%s\n ", device->buf);
-    goto OC_OUT_ERROR;
-  }
-
-  strlcpy(devparms.serialnr, ptr, 128);
-
-  ptr = strtok(NULL, ",");
-  if(ptr == NULL)
-  {
-    snprintf(str, 1024, "Received an unknown identification string from device:\n\n%s\n ", device->buf);
-    goto OC_OUT_ERROR;
-  }
-
-  strlcpy(devparms.softwvers, ptr, 128);
-
-  for(i=0; ; i++)
-  {
-    if(devparms.softwvers[i] == 0)  break;
-
-    if(devparms.softwvers[i] == ';')
-    {
-      devparms.softwvers[i] = 0;
-
-      break;
+    devParms.channelCnt = 0;
+    devParms.bandwidth = 0;
+    devParms.modelName[0] = 0;
+    strlcpy(respStr, device->buf, 1024);
+    ptr = strtok(respStr, ",");
+    if(ptr == nullptr) {
+        snprintf(str,
+            1024,
+            "Received an unknown identification string from device:\n\n%s\n ",
+            device->buf);
+        goto OC_OUT_ERROR;
     }
-  }
 
-  if((devparms.modelserie != 6) &&
-     (devparms.modelserie != 1))
-  {
-    msgBox.setIcon(QMessageBox::Warning);
-    msgBox.setText("Unsupported device detected.");
-    msgBox.setInformativeText("This software has not been tested with your device.\n"
-      "It has been tested with the DS6000 and DS1000Z series only.\n"
-      "If you continue, it's likely that the program will not work correctly at some points.\n"
-      "\nDo you want to continue?\n");
-    msgBox.setStandardButtons(QMessageBox::Yes | QMessageBox::No);
-    msgBox.setDefaultButton(QMessageBox::Yes);
-    int ret = msgBox.exec();
-
-    if(ret == QMessageBox::No)
-    {
-      statusLabel->setText("Disconnected");
-
-      devparms.connected = 0;
-
-      close_connection();
-
-      return;
+    if(strcmp(ptr, "RIGOL TECHNOLOGIES")) {
+        snprintf(str,
+            1024,
+            "Received an unknown identification string from device:\n\n%s\n ",
+            device->buf);
+        goto OC_OUT_ERROR;
     }
-  }
 
-  if(get_device_settings())
-  {
-    strlcpy(str, "Can not read device settings", 4096);
+    ptr = strtok(nullptr, ",");
+    if(ptr == nullptr) {
+        snprintf(str,
+            1024,
+            "Received an unknown identification string from device:\n\n%s\n ",
+            device->buf);
+        goto OC_OUT_ERROR;
+    }
 
-    goto OC_OUT_ERROR;
-  }
+    getDeviceModel(ptr);
+    if((!devParms.channelCnt) || (!devParms.bandwidth)) {
+        snprintf(str,
+            1024,
+            "Received an unknown identification string from device:\n\n%s\n ",
+            device->buf);
+        goto OC_OUT_ERROR;
+    }
 
-  if(devparms.timebasedelayenable)
-  {
-    devparms.current_screen_sf = 100.0 / devparms.timebasedelayscale;
-  }
-  else
-  {
-    devparms.current_screen_sf = 100.0 / devparms.timebasescale;
-  }
+    ptr = strtok(nullptr, ",");
+    if(ptr == nullptr) {
+        snprintf(str,
+            1024,
+            "Received an unknown identification string from device:\n\n%s\n ",
+            device->buf);
+        goto OC_OUT_ERROR;
+    }
 
-  if((devparms.modelserie == 1) || (devparms.modelserie == 2))
-  {
-    trig50pctButton->setEnabled(false);
-  }
+    strlcpy(devParms.serialNum, ptr, 128);
+    ptr = strtok(nullptr, ",");
+    if(ptr == nullptr) {
+        snprintf(str,
+            1024,
+            "Received an unknown identification string from device:\n\n%s\n ",
+            device->buf);
+        goto OC_OUT_ERROR;
+    }
 
-  if(devparms.channel_cnt < 4)
-  {
-    ch4Button->setEnabled(false);
+    strlcpy(devParms.softwVers, ptr, 128);
+    for(int i{};; i++) {
+        if(devParms.softwVers[i] == 0)
+            break;
+        if(devParms.softwVers[i] == ';') {
+            devParms.softwVers[i] = 0;
+            break;
+        }
+    }
 
-    ch4Button->setVisible(false);
-  }
+    if((devParms.modelSerie != 6) && (devParms.modelSerie != 1)) {
+        msgBox.setIcon(QMessageBox::Warning);
+        msgBox.setText("Unsupported device detected.");
+        msgBox.setInformativeText("This software has not been tested with your device.\n"
+                                  "It has been tested with the DS6000 and DS1000Z series only.\n"
+                                  "If you continue, it's likely that the program will not work "
+                                  "correctly at some points.\n"
+                                  "\nDo you want to continue?\n");
+        msgBox.setStandardButtons(QMessageBox::Yes | QMessageBox::No);
+        msgBox.setDefaultButton(QMessageBox::Yes);
+        int ret = msgBox.exec();
+        if(ret == QMessageBox::No) {
+            statusLabel->setText("Disconnected");
+            devParms.connected = 0;
+            closeConnection();
+            return;
+        }
+    }
 
-  if(devparms.channel_cnt < 3)
-  {
-    ch3Button->setEnabled(false);
+    if(getDeviceSettings()) {
+        strlcpy(str, "Can not read device settings", 4096);
+        goto OC_OUT_ERROR;
+    }
 
-    ch3Button->setVisible(false);
-  }
+    if(devParms.timebasedelayenable)
+        devParms.currentScreenSf = 100.0 / devParms.timebasedelayscale;
+    else
+        devParms.currentScreenSf = 100.0 / devParms.timebasescale;
+    if((devParms.modelSerie == 1) || (devParms.modelSerie == 2))
+        trig50pctButton->setEnabled(false);
 
-  if(devparms.channel_cnt < 2)
-  {
-    ch2Button->setEnabled(false);
+    if(devParms.channelCnt < 4) {
+        ch4Button->setEnabled(false);
+        ch4Button->setVisible(false);
+    }
+    if(devParms.channelCnt < 3) {
+        ch3Button->setEnabled(false);
+        ch3Button->setVisible(false);
+    }
+    if(devParms.channelCnt < 2) {
+        ch2Button->setEnabled(false);
+        ch2Button->setVisible(false);
+    }
 
-    ch2Button->setVisible(false);
-  }
-
-  devparms.cmd_cue_idx_in = 0;
-  devparms.cmd_cue_idx_out = 0;
-
-  devparms.func_has_record = 0;
-
-  devparms.fftbufsz = devparms.hordivisions * 50;
-
-  if(devparms.k_cfg != NULL)
-  {
-    free(devparms.k_cfg);
-  }
-  devparms.k_cfg = kiss_fftr_alloc(devparms.fftbufsz * 2, 0, NULL, NULL);
-
-  connect(adjDial,          SIGNAL(valueChanged(int)), this, SLOT(adjDialChanged(int)));
-  connect(trigAdjustDial,   SIGNAL(valueChanged(int)), this, SLOT(trigAdjustDialChanged(int)));
-  connect(horScaleDial,     SIGNAL(valueChanged(int)), this, SLOT(horScaleDialChanged(int)));
-  connect(horPosDial,       SIGNAL(valueChanged(int)), this, SLOT(horPosDialChanged(int)));
-  connect(vertOffsetDial,   SIGNAL(valueChanged(int)), this, SLOT(vertOffsetDialChanged(int)));
-  connect(vertScaleDial,    SIGNAL(valueChanged(int)), this, SLOT(vertScaleDialChanged(int)));
-  connect(navDial,          SIGNAL(valueChanged(int)), this, SLOT(navDialChanged(int)));
-
-  connect(ch1Button,        SIGNAL(clicked()),      this, SLOT(ch1ButtonClicked()));
-  connect(ch2Button,        SIGNAL(clicked()),      this, SLOT(ch2ButtonClicked()));
-  connect(ch3Button,        SIGNAL(clicked()),      this, SLOT(ch3ButtonClicked()));
-  connect(ch4Button,        SIGNAL(clicked()),      this, SLOT(ch4ButtonClicked()));
-  connect(chanMenuButton,   SIGNAL(clicked()),      this, SLOT(chan_menu()));
-  connect(mathMenuButton,   SIGNAL(clicked()),      this, SLOT(math_menu()));
-  connect(waveForm,         SIGNAL(chan1Clicked()), this, SLOT(ch1ButtonClicked()));
-  connect(waveForm,         SIGNAL(chan2Clicked()), this, SLOT(ch2ButtonClicked()));
-  connect(waveForm,         SIGNAL(chan3Clicked()), this, SLOT(ch3ButtonClicked()));
-  connect(waveForm,         SIGNAL(chan4Clicked()), this, SLOT(ch4ButtonClicked()));
-  connect(clearButton,      SIGNAL(clicked()),      this, SLOT(clearButtonClicked()));
-  connect(autoButton,       SIGNAL(clicked()),      this, SLOT(autoButtonClicked()));
-  connect(runButton,        SIGNAL(clicked()),      this, SLOT(runButtonClicked()));
-  connect(singleButton,     SIGNAL(clicked()),      this, SLOT(singleButtonClicked()));
-  connect(horMenuButton,    SIGNAL(clicked()),      this, SLOT(horMenuButtonClicked()));
-  connect(trigModeButton,   SIGNAL(clicked()),      this, SLOT(trigModeButtonClicked()));
-  connect(trigMenuButton,   SIGNAL(clicked()),      this, SLOT(trigMenuButtonClicked()));
-  connect(trigForceButton,  SIGNAL(clicked()),      this, SLOT(trigForceButtonClicked()));
-  connect(trig50pctButton,  SIGNAL(clicked()),      this, SLOT(trig50pctButtonClicked()));
-  connect(acqButton,        SIGNAL(clicked()),      this, SLOT(acqButtonClicked()));
-  connect(cursButton,       SIGNAL(clicked()),      this, SLOT(cursButtonClicked()));
-  connect(saveButton,       SIGNAL(clicked()),      this, SLOT(saveButtonClicked()));
-  connect(dispButton,       SIGNAL(clicked()),      this, SLOT(dispButtonClicked()));
-  connect(utilButton,       SIGNAL(clicked()),      this, SLOT(utilButtonClicked()));
-  connect(helpButton,       SIGNAL(clicked()),      this, SLOT(helpButtonClicked()));
-  connect(measureButton,    SIGNAL(clicked()),      this, SLOT(measureButtonClicked()));
-
-  connect(select_chan1_act, SIGNAL(triggered()),    this, SLOT(ch1ButtonClicked()));
-  connect(select_chan2_act, SIGNAL(triggered()),    this, SLOT(ch2ButtonClicked()));
-  connect(select_chan3_act, SIGNAL(triggered()),    this, SLOT(ch3ButtonClicked()));
-  connect(select_chan4_act, SIGNAL(triggered()),    this, SLOT(ch4ButtonClicked()));
-  connect(toggle_fft_act,   SIGNAL(triggered()),    this, SLOT(toggle_fft()));
-
-  connect(horPosDial,     SIGNAL(customContextMenuRequested(QPoint)), this, SLOT(horPosDialClicked(QPoint)));
-  connect(vertOffsetDial, SIGNAL(customContextMenuRequested(QPoint)), this, SLOT(vertOffsetDialClicked(QPoint)));
-  connect(horScaleDial,   SIGNAL(customContextMenuRequested(QPoint)), this, SLOT(horScaleDialClicked(QPoint)));
-  connect(vertScaleDial,  SIGNAL(customContextMenuRequested(QPoint)), this, SLOT(vertScaleDialClicked(QPoint)));
-  connect(trigAdjustDial, SIGNAL(customContextMenuRequested(QPoint)), this, SLOT(trigAdjustDialClicked(QPoint)));
-  connect(adjDial,        SIGNAL(customContextMenuRequested(QPoint)), this, SLOT(adjustDialClicked(QPoint)));
-
-  connect(playpauseButton, SIGNAL(clicked()), this, SLOT(playpauseButtonClicked()));
-  connect(stopButton,      SIGNAL(clicked()), this, SLOT(stopButtonClicked()));
-  connect(recordButton,    SIGNAL(clicked()), this, SLOT(recordButtonClicked()));
-
-  snprintf(str, 4096, PROGRAM_NAME " " PROGRAM_VERSION "   %s   %s   %s",
-          devparms.serialnr, devparms.softwvers, dev_str);
-//   sprintf(str, PROGRAM_NAME " " PROGRAM_VERSION "   %s   %s",
-//           devparms.softwvers, dev_str);
-
-  setWindowTitle(str);
-
-  statusLabel->setText("Connected");
-
-  scrn_thread->set_device(device);
-
-  devparms.connected = 1;
-
-//  test_timer->start(2000);
-
-  DPRwidget->setEnabled(true);
-
-  devparms.screenupdates_on = 1;
-
-  scrn_thread->h_busy = 0;
-
-  scrn_timer->start(devparms.screentimerival);
-
-  return;
-
+    devParms.cmdCueIdxIn = 0;
+    devParms.cmdCueIdxOut = 0;
+    devParms.funcHasRecord = 0;
+    devParms.fftBufsz = devParms.horDivisions * 50;
+    if(devParms.kCfg != nullptr)
+        free(devParms.kCfg);
+    devParms.kCfg = kiss_fftr_alloc(devParms.fftBufsz * 2, 0, nullptr, nullptr);
+    connect(adjDial, &Dial::valueChanged,
+        this, &UiMainWindow::adjDialChanged);
+    connect(trigAdjustDial, &Dial::valueChanged,
+        this, &UiMainWindow::trigAdjustDialChanged);
+    connect(horScaleDial, &Dial::valueChanged,
+        this, &UiMainWindow::horScaleDialChanged);
+    connect(horPosDial, &Dial::valueChanged,
+        this, &UiMainWindow::horPosDialChanged);
+    connect(vertOffsetDial, &Dial::valueChanged,
+        this, &UiMainWindow::vertOffsetDialChanged);
+    connect(vertScaleDial, &Dial::valueChanged,
+        this, &UiMainWindow::vertScaleDialChanged);
+    connect(navDial, &Dial::valueChanged,
+        this, &UiMainWindow::navDialChanged);
+    connect(ch1Button, &QPushButton::clicked,
+        this, &UiMainWindow::ch1ButtonClicked);
+    connect(ch2Button, &QPushButton::clicked,
+        this, &UiMainWindow::ch2ButtonClicked);
+    connect(ch3Button, &QPushButton::clicked,
+        this, &UiMainWindow::ch3ButtonClicked);
+    connect(ch4Button, &QPushButton::clicked,
+        this, &UiMainWindow::ch4ButtonClicked);
+    connect(chanMenuButton, &QPushButton::clicked,
+        this, &UiMainWindow::chanMenu);
+    connect(mathMenuButton, &QPushButton::clicked,
+        this, &UiMainWindow::mathMenu);
+    connect(waveForm, &SignalCurve::chan1Clicked,
+        this, &UiMainWindow::ch1ButtonClicked);
+    connect(waveForm, &SignalCurve::chan2Clicked,
+        this, &UiMainWindow::ch2ButtonClicked);
+    connect(waveForm, &SignalCurve::chan3Clicked,
+        this, &UiMainWindow::ch3ButtonClicked);
+    connect(waveForm, &SignalCurve::chan4Clicked,
+        this, &UiMainWindow::ch4ButtonClicked);
+    connect(clearButton, &QPushButton::clicked,
+        this, &UiMainWindow::clearButtonClicked);
+    connect(autoButton, &QPushButton::clicked,
+        this, &UiMainWindow::autoButtonClicked);
+    connect(runButton, &QPushButton::clicked,
+        this, &UiMainWindow::runButtonClicked);
+    connect(singleButton, &QPushButton::clicked,
+        this, &UiMainWindow::singleButtonClicked);
+    connect(horMenuButton, &QPushButton::clicked,
+        this, &UiMainWindow::horMenuButtonClicked);
+    connect(trigModeButton, &QPushButton::clicked,
+        this, &UiMainWindow::trigModeButtonClicked);
+    connect(trigMenuButton, &QPushButton::clicked,
+        this, &UiMainWindow::trigMenuButtonClicked);
+    connect(trigForceButton, &QPushButton::clicked,
+        this, &UiMainWindow::trigForceButtonClicked);
+    connect(trig50pctButton, &QPushButton::clicked,
+        this, &UiMainWindow::trig50pctButtonClicked);
+    connect(acqButton, &QPushButton::clicked,
+        this, &UiMainWindow::acqButtonClicked);
+    connect(cursButton, &QPushButton::clicked,
+        this, &UiMainWindow::cursButtonClicked);
+    connect(saveButton, &QPushButton::clicked,
+        this, &UiMainWindow::saveButtonClicked);
+    connect(dispButton, &QPushButton::clicked,
+        this, &UiMainWindow::dispButtonClicked);
+    connect(utilButton, &QPushButton::clicked,
+        this, &UiMainWindow::utilButtonClicked);
+    connect(helpButton, &QPushButton::clicked,
+        this, &UiMainWindow::helpButtonClicked);
+    connect(measureButton, &QPushButton::clicked,
+        this, &UiMainWindow::measureButtonClicked);
+    connect(selectChan1Act, &QAction::triggered,
+        this, &UiMainWindow::ch1ButtonClicked);
+    connect(selectChan2Act, &QAction::triggered,
+        this, &UiMainWindow::ch2ButtonClicked);
+    connect(selectChan3Act, &QAction::triggered,
+        this, &UiMainWindow::ch3ButtonClicked);
+    connect(selectChan4Act, &QAction::triggered,
+        this, &UiMainWindow::ch4ButtonClicked);
+    connect(toggleFftAct, &QAction::triggered,
+        this, &UiMainWindow::toggleFft);
+    connect(horPosDial, &Dial::customContextMenuRequested,
+        this, &UiMainWindow::horPosDialClicked);
+    connect(vertOffsetDial, &Dial::customContextMenuRequested,
+        this, &UiMainWindow::vertOffsetDialClicked);
+    connect(horScaleDial, &Dial::customContextMenuRequested,
+        this, &UiMainWindow::horScaleDialClicked);
+    connect(vertScaleDial, &Dial::customContextMenuRequested,
+        this, &UiMainWindow::vertScaleDialClicked);
+    connect(trigAdjustDial, &Dial::customContextMenuRequested,
+        this, &UiMainWindow::trigAdjustDialClicked);
+    connect(adjDial, &Dial::customContextMenuRequested,
+        this, &UiMainWindow::adjustDialClicked);
+    connect(playpauseButton, &QPushButton::clicked,
+        this, &UiMainWindow::playpauseButtonClicked);
+    connect(stopButton, &QPushButton::clicked,
+        this, &UiMainWindow::stopButtonClicked);
+    connect(recordButton, &QPushButton::clicked,
+        this, &UiMainWindow::recordButtonClicked);
+    snprintf(str,
+        4096,
+        PROGRAM_NAME " " PROGRAM_VERSION "   %s   %s   %s",
+        devParms.serialNum,
+        devParms.softwVers,
+        devStr); //   sprintf(str, PROGRAM_NAME " " PROGRAM_VERSION "   %s   %s",
+    //           devParms.softwvers, devStr);
+    setWindowTitle(str);
+    statusLabel->setText("Connected");
+    scrnThread->setDevice(device);
+    devParms.connected = 1;
+    //  testTimer->start(2000);
+    DPRwidget->setEnabled(true);
+    devParms.screenupdatesOn = 1;
+    scrnThread->hBusy = 0;
+    scrnTimer->start(devParms.screenTimerIval);
+    return;
 OC_OUT_ERROR:
 
-  statusLabel->setText("Disconnected");
-
-  devparms.connected = 0;
-
-  QMessageBox mesgbox;
-  mesgbox.setIcon(QMessageBox::Critical);
-  mesgbox.setText(str);
-  mesgbox.exec();
-
-  close_connection();
+    statusLabel->setText("Disconnected");
+    devParms.connected = 0;
+    QMessageBox mesgbox;
+    mesgbox.setIcon(QMessageBox::Critical);
+    mesgbox.setText(str);
+    mesgbox.exec();
+    closeConnection();
 }
 
-
-void UI_Mainwindow::close_connection()
-{
-  DPRwidget->setEnabled(false);
-
-  test_timer->stop();
-
-  scrn_timer->stop();
-
-  adjdial_timer->stop();
-
-  devparms.connected = 0;
-
-  if(scrn_thread->wait(5000) == false)
-  {
-    scrn_thread->terminate();
-
-    scrn_thread->wait(5000);
-
-    pthread_mutex_trylock(&devparms.mutexx);
-    pthread_mutex_unlock(&devparms.mutexx);
-
-    scrn_thread->h_busy = 0;
-  }
-
-  devparms.screenupdates_on = 0;
-
-  setWindowTitle(PROGRAM_NAME " " PROGRAM_VERSION);
-
-  strlcpy(devparms.modelname, "-----", 128);
-
-  adjDialFunc = ADJ_DIAL_FUNC_NONE;
-  navDialFunc = NAV_DIAL_FUNC_NONE;
-
-  disconnect(adjDial,         SIGNAL(valueChanged(int)), this, SLOT(adjDialChanged(int)));
-  disconnect(trigAdjustDial,  SIGNAL(valueChanged(int)), this, SLOT(trigAdjustDialChanged(int)));
-  disconnect(horScaleDial,    SIGNAL(valueChanged(int)), this, SLOT(horScaleDialChanged(int)));
-  disconnect(horPosDial,      SIGNAL(valueChanged(int)), this, SLOT(horPosDialChanged(int)));
-  disconnect(vertOffsetDial,  SIGNAL(valueChanged(int)), this, SLOT(vertOffsetDialChanged(int)));
-  disconnect(vertScaleDial,   SIGNAL(valueChanged(int)), this, SLOT(vertScaleDialChanged(int)));
-  disconnect(navDial,         SIGNAL(valueChanged(int)), this, SLOT(navDialChanged(int)));
-
-  disconnect(ch1Button,        SIGNAL(clicked()),     this, SLOT(ch1ButtonClicked()));
-  disconnect(ch2Button,        SIGNAL(clicked()),     this, SLOT(ch2ButtonClicked()));
-  disconnect(ch3Button,        SIGNAL(clicked()),     this, SLOT(ch3ButtonClicked()));
-  disconnect(ch4Button,        SIGNAL(clicked()),     this, SLOT(ch4ButtonClicked()));
-  disconnect(chanMenuButton,   SIGNAL(clicked()),      this, SLOT(chan_menu()));
-  disconnect(mathMenuButton,   SIGNAL(clicked()),      this, SLOT(math_menu()));
-  disconnect(waveForm,         SIGNAL(chan1Clicked()), this, SLOT(ch1ButtonClicked()));
-  disconnect(waveForm,         SIGNAL(chan2Clicked()), this, SLOT(ch2ButtonClicked()));
-  disconnect(waveForm,         SIGNAL(chan3Clicked()), this, SLOT(ch3ButtonClicked()));
-  disconnect(waveForm,         SIGNAL(chan4Clicked()), this, SLOT(ch4ButtonClicked()));
-  disconnect(clearButton,      SIGNAL(clicked()),     this, SLOT(clearButtonClicked()));
-  disconnect(autoButton,       SIGNAL(clicked()),     this, SLOT(autoButtonClicked()));
-  disconnect(runButton,        SIGNAL(clicked()),     this, SLOT(runButtonClicked()));
-  disconnect(singleButton,     SIGNAL(clicked()),     this, SLOT(singleButtonClicked()));
-  disconnect(horMenuButton,    SIGNAL(clicked()),     this, SLOT(horMenuButtonClicked()));
-  disconnect(trigModeButton,   SIGNAL(clicked()),     this, SLOT(trigModeButtonClicked()));
-  disconnect(trigMenuButton,   SIGNAL(clicked()),     this, SLOT(trigMenuButtonClicked()));
-  disconnect(trigForceButton,  SIGNAL(clicked()),     this, SLOT(trigForceButtonClicked()));
-  disconnect(trig50pctButton,  SIGNAL(clicked()),     this, SLOT(trig50pctButtonClicked()));
-  disconnect(acqButton,        SIGNAL(clicked()),     this, SLOT(acqButtonClicked()));
-  disconnect(cursButton,       SIGNAL(clicked()),     this, SLOT(cursButtonClicked()));
-  disconnect(saveButton,       SIGNAL(clicked()),     this, SLOT(saveButtonClicked()));
-  disconnect(dispButton,       SIGNAL(clicked()),     this, SLOT(dispButtonClicked()));
-  disconnect(utilButton,       SIGNAL(clicked()),     this, SLOT(utilButtonClicked()));
-  disconnect(helpButton,       SIGNAL(clicked()),     this, SLOT(helpButtonClicked()));
-  disconnect(measureButton,    SIGNAL(clicked()),     this, SLOT(measureButtonClicked()));
-
-  disconnect(select_chan1_act, SIGNAL(triggered()),    this, SLOT(ch1ButtonClicked()));
-  disconnect(select_chan2_act, SIGNAL(triggered()),    this, SLOT(ch2ButtonClicked()));
-  disconnect(select_chan3_act, SIGNAL(triggered()),    this, SLOT(ch3ButtonClicked()));
-  disconnect(select_chan4_act, SIGNAL(triggered()),    this, SLOT(ch4ButtonClicked()));
-  disconnect(toggle_fft_act,   SIGNAL(triggered()),    this, SLOT(toggle_fft()));
-
-  disconnect(horPosDial,     SIGNAL(customContextMenuRequested(QPoint)), this, SLOT(horPosDialClicked(QPoint)));
-  disconnect(vertOffsetDial, SIGNAL(customContextMenuRequested(QPoint)), this, SLOT(vertOffsetDialClicked(QPoint)));
-  disconnect(horScaleDial,   SIGNAL(customContextMenuRequested(QPoint)), this, SLOT(horScaleDialClicked(QPoint)));
-  disconnect(vertScaleDial,  SIGNAL(customContextMenuRequested(QPoint)), this, SLOT(vertScaleDialClicked(QPoint)));
-  disconnect(trigAdjustDial, SIGNAL(customContextMenuRequested(QPoint)), this, SLOT(trigAdjustDialClicked(QPoint)));
-  disconnect(adjDial,        SIGNAL(customContextMenuRequested(QPoint)), this, SLOT(adjustDialClicked(QPoint)));
-
-  disconnect(playpauseButton, SIGNAL(clicked()), this, SLOT(playpauseButtonClicked()));
-  disconnect(stopButton,      SIGNAL(clicked()), this, SLOT(stopButtonClicked()));
-  disconnect(recordButton,    SIGNAL(clicked()), this, SLOT(recordButtonClicked()));
-
-  scrn_thread->set_device(NULL);
-
-  devparms.math_fft = 0;
-
-  devparms.math_fft_split = 0;
-
-  waveForm->clear();
-
-  tmc_close();
-
-  device = NULL;
-
-  if(devparms.k_cfg != NULL)
-  {
-    free(devparms.k_cfg);
-
-    devparms.k_cfg = NULL;
-  }
-
-  statusLabel->setText("Disconnected");
-
-  printf("Disconnected from device\n");
-}
-
-
-void UI_Mainwindow::closeEvent(QCloseEvent *cl_event)
-{
-  devparms.connected = 0;
-
-  test_timer->stop();
-
-  scrn_timer->stop();
-
-  adjdial_timer->stop();
-
-  scrn_thread->wait(5000);
-
-  scrn_thread->terminate();
-
-  scrn_thread->wait(5000);
-
-  devparms.screenupdates_on = 0;
-
-  scrn_thread->set_device(NULL);
-
-  tmc_close();
-
-  device = NULL;
-
-  cl_event->accept();
-}
-
-
-int UI_Mainwindow::get_device_settings(int delay)
-{
-  int chn;
-
-  char str[4096] = {""};
-
-  statusLabel->setText("Reading instrument settings...");
-
-  read_settings_thread rd_set_thrd;
-  rd_set_thrd.set_device(device);
-  rd_set_thrd.set_delay(delay);
-  rd_set_thrd.set_devparm_ptr(&devparms);
-  rd_set_thrd.start();
-
-  QMessageBox msgBox;
-  msgBox.setIcon(QMessageBox::NoIcon);
-  msgBox.setText("Reading instrument settings...");
-  msgBox.addButton("Abort", QMessageBox::RejectRole);
-
-  connect(&rd_set_thrd, SIGNAL(finished()), &msgBox, SLOT(accept()));
-
-  if(msgBox.exec() != QDialog::Accepted)
-  {
-    statusLabel->setText("Reading settings aborted");
-    rd_set_thrd.terminate();
-    rd_set_thrd.wait(20000);
-    snprintf(str, 4096, "Reading settings aborted");
-    disconnect(&rd_set_thrd, 0, 0, 0);
-    return -1;
-  }
-
-  disconnect(&rd_set_thrd, 0, 0, 0);
-
-  if(rd_set_thrd.get_error_num() != 0)
-  {
-    statusLabel->setText("Error while reading settings");
-    rd_set_thrd.get_error_str(str, 4096);
-    msgBox.setIcon(QMessageBox::Critical);
-    msgBox.setText(str);
-    msgBox.exec();
-    strlcpy(str, "Can not read settings from device", 4096);
-    return -1;
-  }
-
-  for(chn=0; chn<devparms.channel_cnt; chn++)
-  {
-    if(devparms.chandisplay[chn] == 1)
-    {
-      switch(chn)
-      {
-        case 0: ch1Button->setStyleSheet("background: #FFFF33;");
-                break;
-        case 1: ch2Button->setStyleSheet("background: #33FFFF;");
-                break;
-        case 2: ch3Button->setStyleSheet("background: #FF33FF;");
-                break;
-        case 3: ch4Button->setStyleSheet("background: #0080FF;");
-                break;
-      }
-    }
-    else
-    {
-      switch(chn)
-      {
-        case 0: ch1Button->setStyleSheet(def_stylesh);
-                break;
-        case 1: ch2Button->setStyleSheet(def_stylesh);
-                break;
-        case 2: ch3Button->setStyleSheet(def_stylesh);
-                break;
-        case 3: ch4Button->setStyleSheet(def_stylesh);
-                break;
-      }
-    }
-  }
-
-  if(devparms.triggersweep == 0)
-  {
-    trigModeAutoLed->setValue(true);
-    trigModeNormLed->setValue(false);
-    trigModeSingLed->setValue(false);
-  }
-  else if(devparms.triggersweep == 1)
-    {
-      trigModeAutoLed->setValue(false);
-      trigModeNormLed->setValue(true);
-      trigModeSingLed->setValue(false);
-    }
-    else if(devparms.triggersweep == 2)
-      {
-        trigModeAutoLed->setValue(false);
-        trigModeNormLed->setValue(false);
-        trigModeSingLed->setValue(true);
-      }
-
-  updateLabels();
-
-  return 0;
-}
-
-
-int UI_Mainwindow::parse_preamble(char *str, int sz, struct waveform_preamble *wfp, int chn)
-{
-  char *ptr;
-
-  if(sz < 19)
-  {
-    return -1;
-  }
-
-  ptr = strtok(str, ",");
-  if(ptr == NULL)
-  {
-    return -1;
-  }
-
-  wfp->format = atoi(ptr);
-
-  ptr = strtok(NULL, ",");
-  if(ptr == NULL)
-  {
-    return -1;
-  }
-
-  wfp->type = atoi(ptr);
-
-  ptr = strtok(NULL, ",");
-  if(ptr == NULL)
-  {
-    return -1;
-  }
-
-  wfp->points = atoi(ptr);
-
-  ptr = strtok(NULL, ",");
-  if(ptr == NULL)
-  {
-    return -1;
-  }
-
-  wfp->count = atoi(ptr);
-
-  ptr = strtok(NULL, ",");
-  if(ptr == NULL)
-  {
-    return -1;
-  }
-
-  wfp->xincrement[chn] = atof(ptr);
-
-  ptr = strtok(NULL, ",");
-  if(ptr == NULL)
-  {
-    return -1;
-  }
-
-  wfp->xorigin[chn] = atof(ptr);
-
-  ptr = strtok(NULL, ",");
-  if(ptr == NULL)
-  {
-    return -1;
-  }
-
-  wfp->xreference[chn] = atof(ptr);
-
-  ptr = strtok(NULL, ",");
-  if(ptr == NULL)
-  {
-    return -1;
-  }
-
-  wfp->yincrement[chn] = atof(ptr);
-
-  ptr = strtok(NULL, ",");
-  if(ptr == NULL)
-  {
-    return -1;
-  }
-
-  wfp->yorigin[chn] = atof(ptr);
-
-  ptr = strtok(NULL, ",");
-  if(ptr == NULL)
-  {
-    return -1;
-  }
-
-  wfp->yreference[chn] = atoi(ptr);
-
-  ptr = strtok(NULL, ",");
-  if(ptr != NULL)
-  {
-    return -1;
-  }
-
-  return 0;
-}
-
-
-int UI_Mainwindow::get_metric_factor(double value)
-{
-  int suffix=0;
-
-  if(value < 0)
-  {
-      value *= -1;
-  }
-
-  if(value >= 1e12 && value < 1e15)
-  {
-      suffix = 12;
-  }
-  else if(value >= 1e9 && value < 1e12)
-    {
-        suffix = 9;
-    }
-    else if(value >= 1e6 && value < 1e9)
-      {
-          suffix = 6;
-      }
-      else if(value >= 1e3 && value < 1e6)
-        {
-          suffix = 3;
-        }
-        else if(value >= 1e-3 && value < 1)
-          {
-            suffix = -3;
-          }
-          else if( value >= 1e-6 && value < 1e-3)
-            {
-              suffix = -6;
-            }
-            else if(value >= 1e-9 && value < 1e-6)
-              {
-                suffix = -9;
-              }
-              else if(value >= 1e-12 && value < 1e-9)
-                {
-                  suffix = -12;
-                }
-
-  return suffix;
-}
-
-
-double UI_Mainwindow::get_stepsize_divide_by_1000(double val)
-{
-  int exp=0;
-
-  if(val < 1e-9)
-  {
-    return 1e-9;
-  }
-
-  while(val < 1)
-  {
-    val *= 10;
-
-    exp--;
-  }
-
-  while(val >= 10)
-  {
-    val /= 10;
-
-    exp++;
-  }
-
-  val = exp10(exp - 2);
-
-  if((val < 1e-13) && (val > -1e-13))
-  {
-    return 0;
-  }
-
-  return val;
-}
-
-
-void UI_Mainwindow::get_device_model(const char *str)
-{
-  devparms.channel_cnt = 0;
-
-  devparms.bandwidth = 0;
-
-  devparms.hordivisions = 14;
-
-  devparms.vertdivisions = 8;
-
-  if(!strcmp(str, "DS6104"))
-  {
-    devparms.channel_cnt = 4;
-
-    devparms.bandwidth = 1000;
-
-    devparms.modelserie = 6;
-  }
-
-  if(!strcmp(str, "DS6064"))
-  {
-    devparms.channel_cnt = 4;
-
-    devparms.bandwidth = 600;
-
-    devparms.modelserie = 6;
-  }
-
-  if(!strcmp(str, "DS6102"))
-  {
-    devparms.channel_cnt = 2;
-
-    devparms.bandwidth = 1000;
-
-    devparms.modelserie = 6;
-  }
-
-  if(!strcmp(str, "DS6062"))
-  {
-    devparms.channel_cnt = 2;
-
-    devparms.bandwidth = 600;
-
-    devparms.modelserie = 6;
-  }
-
-  if(!strcmp(str, "DS4012"))
-  {
-    devparms.channel_cnt = 2;
-
-    devparms.bandwidth = 100;
-
-    devparms.modelserie = 4;
-  }
-
-  if(!strcmp(str, "DS4014"))
-  {
-    devparms.channel_cnt = 4;
-
-    devparms.bandwidth = 100;
-
-    devparms.modelserie = 4;
-  }
-
-  if(!strcmp(str, "DS4022"))
-  {
-    devparms.channel_cnt = 2;
-
-    devparms.bandwidth = 200;
-
-    devparms.modelserie = 4;
-  }
-
-  if(!strcmp(str, "DS4024"))
-  {
-    devparms.channel_cnt = 4;
-
-    devparms.bandwidth = 200;
-
-    devparms.modelserie = 4;
-  }
-
-  if(!strcmp(str, "DS4032"))
-  {
-    devparms.channel_cnt = 2;
-
-    devparms.bandwidth = 350;
-
-    devparms.modelserie = 4;
-  }
-
-  if(!strcmp(str, "DS4034"))
-  {
-    devparms.channel_cnt = 4;
-
-    devparms.bandwidth = 350;
-
-    devparms.modelserie = 4;
-  }
-
-  if(!strcmp(str, "DS4052"))
-  {
-    devparms.channel_cnt = 2;
-
-    devparms.bandwidth = 500;
-
-    devparms.modelserie = 4;
-  }
-
-  if(!strcmp(str, "DS4054"))
-  {
-    devparms.channel_cnt = 4;
-
-    devparms.bandwidth = 500;
-
-    devparms.modelserie = 4;
-  }
-
-  if(!strcmp(str, "MSO4012"))
-  {
-    devparms.channel_cnt = 2;
-
-    devparms.bandwidth = 100;
-
-    devparms.modelserie = 4;
-  }
-
-  if(!strcmp(str, "MSO4024"))
-  {
-    devparms.channel_cnt = 4;
-
-    devparms.bandwidth = 200;
-
-    devparms.modelserie = 4;
-  }
-
-  if(!strcmp(str, "DS2072A"))
-  {
-    devparms.channel_cnt = 2;
-
-    devparms.bandwidth = 70;
-
-    devparms.modelserie = 2;
-  }
-
-  if(!strcmp(str, "DS2072A-S"))
-  {
-    devparms.channel_cnt = 2;
-
-    devparms.bandwidth = 70;
-
-    devparms.modelserie = 2;
-  }
-
-  if(!strcmp(str, "DS2102"))
-  {
-    devparms.channel_cnt = 2;
-
-    devparms.bandwidth = 100;
-
-    devparms.modelserie = 2;
-  }
-
-  if(!strcmp(str, "DS2102A"))
-  {
-    devparms.channel_cnt = 2;
-
-    devparms.bandwidth = 100;
-
-    devparms.modelserie = 2;
-  }
-
-  if(!strcmp(str, "DS2102A-S"))
-  {
-    devparms.channel_cnt = 2;
-
-    devparms.bandwidth = 100;
-
-    devparms.modelserie = 2;
-  }
-
-  if(!strcmp(str, "DS2202"))
-  {
-    devparms.channel_cnt = 2;
-
-    devparms.bandwidth = 200;
-
-    devparms.modelserie = 2;
-  }
-
-  if(!strcmp(str, "DS2202A"))
-  {
-    devparms.channel_cnt = 2;
-
-    devparms.bandwidth = 200;
-
-    devparms.modelserie = 2;
-  }
-
-  if(!strcmp(str, "DS2202A-S"))
-  {
-    devparms.channel_cnt = 2;
-
-    devparms.bandwidth = 200;
-
-    devparms.modelserie = 2;
-  }
-
-  if(!strcmp(str, "DS2302"))
-  {
-    devparms.channel_cnt = 2;
-
-    devparms.bandwidth = 300;
-
-    devparms.modelserie = 2;
-  }
-
-  if(!strcmp(str, "DS2302A"))
-  {
-    devparms.channel_cnt = 2;
-
-    devparms.bandwidth = 300;
-
-    devparms.modelserie = 2;
-  }
-
-  if(!strcmp(str, "DS2302A-S"))
-  {
-    devparms.channel_cnt = 2;
-
-    devparms.bandwidth = 300;
-
-    devparms.modelserie = 2;
-  }
-
-  if(!strcmp(str, "DS1054Z"))
-  {
-    devparms.channel_cnt = 4;
-
-    devparms.bandwidth = 50;
-
-    devparms.modelserie = 1;
-  }
-
-  if(!strcmp(str, "DS1074Z"))
-  {
-    devparms.channel_cnt = 4;
-
-    devparms.bandwidth = 70;
-
-    devparms.modelserie = 1;
-  }
-
-  if(!strcmp(str, "DS1074Z-S"))
-  {
-    devparms.channel_cnt = 4;
-
-    devparms.bandwidth = 70;
-
-    devparms.modelserie = 1;
-  }
-
-  if(!strcmp(str, "DS1074Z Plus"))
-  {
-    devparms.channel_cnt = 4;
-
-    devparms.bandwidth = 70;
-
-    devparms.modelserie = 1;
-  }
-
-  if(!strcmp(str, "DS1074Z-S Plus"))
-  {
-    devparms.channel_cnt = 4;
-
-    devparms.bandwidth = 70;
-
-    devparms.modelserie = 1;
-  }
-
-  if(!strcmp(str, "DS1104Z"))
-  {
-    devparms.channel_cnt = 4;
-
-    devparms.bandwidth = 100;
-
-    devparms.modelserie = 1;
-  }
-
-  if(!strcmp(str, "DS1104Z-S"))
-  {
-    devparms.channel_cnt = 4;
-
-    devparms.bandwidth = 100;
-
-    devparms.modelserie = 1;
-  }
-
-  if(!strcmp(str, "DS1104Z Plus"))
-  {
-    devparms.channel_cnt = 4;
-
-    devparms.bandwidth = 100;
-
-    devparms.modelserie = 1;
-  }
-
-  if(!strcmp(str, "DS1104Z-S Plus"))
-  {
-    devparms.channel_cnt = 4;
-
-    devparms.bandwidth = 100;
-
-    devparms.modelserie = 1;
-  }
-
-  if(!strcmp(str, "MSO1074Z"))
-  {
-    devparms.channel_cnt = 4;
-
-    devparms.bandwidth = 70;
-
-    devparms.modelserie = 1;
-  }
-
-  if(!strcmp(str, "MSO1104Z"))
-  {
-    devparms.channel_cnt = 4;
-
-    devparms.bandwidth = 100;
-
-    devparms.modelserie = 1;
-  }
-
-  if(!strcmp(str, "MSO1074Z-S"))
-  {
-    devparms.channel_cnt = 4;
-
-    devparms.bandwidth = 70;
-
-    devparms.modelserie = 1;
-  }
-
-  if(!strcmp(str, "MSO1104Z-S"))
-  {
-    devparms.channel_cnt = 4;
-
-    devparms.bandwidth = 100;
-
-    devparms.modelserie = 1;
-  }
-
-  if(!strcmp(str, "DS1202Z-E"))
-  {
-    devparms.channel_cnt = 2;
-
-    devparms.bandwidth = 200;
-
-    devparms.modelserie = 1;
-  }
-
-  if(!strcmp(str, "DS1102Z-E"))
-  {
-    devparms.channel_cnt = 2;
-
-    devparms.bandwidth = 100;
-
-    devparms.modelserie = 1;
-  }
-
-  if(devparms.modelserie == 1)
-  {
-    if(devparms.use_extra_vertdivisions)  devparms.vertdivisions = 10;
-
-    devparms.hordivisions = 12;
-  }
-
-  if(devparms.channel_cnt && devparms.bandwidth && devparms.modelserie)
-  {
-    strlcpy(devparms.modelname, str, 128);
-  }
-}
-
-
-void UI_Mainwindow::former_page()
-{
-  char str[512];
-
-  if(device == NULL)
-  {
-    return;
-  }
-
-  if(!devparms.connected)
-  {
-    return;
-  }
-
-  if(devparms.activechannel < 0)
-  {
-    return;
-  }
-
-  if(devparms.timebasedelayenable)
-  {
-    if(devparms.timebasedelayoffset <= -(((devparms.hordivisions / 2) * devparms.timebasescale) - devparms.timebaseoffset - ((devparms.hordivisions / 2) * devparms.timebasedelayscale)))
-    {
-      return;
-    }
-
-    devparms.timebasedelayoffset -= devparms.timebasedelayscale * devparms.hordivisions;
-
-    if(devparms.timebasedelayoffset <= -(((devparms.hordivisions / 2) * devparms.timebasescale) - devparms.timebaseoffset - ((devparms.hordivisions / 2) * devparms.timebasedelayscale)))
-    {
-      devparms.timebasedelayoffset = -(((devparms.hordivisions / 2) * devparms.timebasescale) - devparms.timebaseoffset - ((devparms.hordivisions / 2) * devparms.timebasedelayscale));
-    }
-
-    strlcpy(str, "Delayed timebase position: ", 512);
-
-    convert_to_metric_suffix(str + strlen(str), devparms.timebasedelayoffset, 2, 512 - strlen(str));
-
-    strlcat(str, "s", 512);
-
-    statusLabel->setText(str);
-
-    horPosDial_timer->start(TMC_DIAL_TIMER_DELAY);
-  }
-  else
-  {
-    devparms.timebaseoffset -= devparms.timebasescale * devparms.hordivisions;
-
-    if(devparms.acquirememdepth > 10)
-    {
-      if(devparms.timebaseoffset <= -(((double)devparms.acquirememdepth / devparms.samplerate) / 2))
-      {
-        devparms.timebaseoffset = -(((double)devparms.acquirememdepth / devparms.samplerate) / 2);
-      }
-    }
-    else
-    {
-      if(devparms.timebaseoffset <= -((devparms.hordivisions / 2) * devparms.timebasescale))
-      {
-        devparms.timebaseoffset = -((devparms.hordivisions / 2) * devparms.timebasescale);
-      }
-    }
-
-    strlcpy(str, "Horizontal position: ", 512);
-
-    convert_to_metric_suffix(str + strlen(str), devparms.timebaseoffset, 2, 512 - strlen(str));
-
-    strlcat(str, "s", 512);
-
-    statusLabel->setText(str);
-
-    horPosDial_timer->start(TMC_DIAL_TIMER_DELAY);
-  }
-
-  waveForm->update();
-}
-
-
-void UI_Mainwindow::next_page()
-{
-  char str[512];
-
-  if(device == NULL)
-  {
-    return;
-  }
-
-  if(!devparms.connected)
-  {
-    return;
-  }
-
-  if(devparms.activechannel < 0)
-  {
-    return;
-  }
-
-  if(devparms.timebasedelayenable)
-  {
-    if(devparms.timebasedelayoffset >= (((devparms.hordivisions / 2) * devparms.timebasescale) + devparms.timebaseoffset - ((devparms.hordivisions / 2) * devparms.timebasedelayscale)))
-    {
-      return;
-    }
-
-    devparms.timebasedelayoffset += devparms.timebasedelayscale * devparms.hordivisions;
-
-    if(devparms.timebasedelayoffset >= (((devparms.hordivisions / 2) * devparms.timebasescale) + devparms.timebaseoffset - ((devparms.hordivisions / 2) * devparms.timebasedelayscale)))
-    {
-      devparms.timebasedelayoffset = (((devparms.hordivisions / 2) * devparms.timebasescale) + devparms.timebaseoffset - ((devparms.hordivisions / 2) * devparms.timebasedelayscale));
-    }
-
-    strlcpy(str, "Delayed timebase position: ", 512);
-
-    convert_to_metric_suffix(str + strlen(str), devparms.timebasedelayoffset, 2, 512 - strlen(str));
-
-    strlcat(str, "s", 512);
-
-    statusLabel->setText(str);
-
-    horPosDial_timer->start(TMC_DIAL_TIMER_DELAY);
-  }
-  else
-  {
-    devparms.timebaseoffset += devparms.timebasescale * devparms.hordivisions;
-
-    if(devparms.acquirememdepth > 10)
-    {
-      if(devparms.timebaseoffset >= (((double)devparms.acquirememdepth / devparms.samplerate) / 2))
-      {
-        devparms.timebaseoffset = (((double)devparms.acquirememdepth / devparms.samplerate) / 2);
-      }
-    }
-    else
-    {
-      if(devparms.timebaseoffset >= (devparms.hordivisions / 2) * devparms.timebasescale)
-      {
-        devparms.timebaseoffset = (devparms.hordivisions / 2) * devparms.timebasescale;
-      }
-    }
-
-    strlcpy(str, "Horizontal position: ", 512);
-
-    convert_to_metric_suffix(str + strlen(str), devparms.timebaseoffset, 2, 512 - strlen(str));
-
-    strlcat(str, "s", 512);
-
-    statusLabel->setText(str);
-
-    horPosDial_timer->start(TMC_DIAL_TIMER_DELAY);
-  }
-
-  waveForm->update();
-}
-
-
-void UI_Mainwindow::shift_page_left()
-{
-  char str[512];
-
-  if(device == NULL)
-  {
-    return;
-  }
-
-  if(!devparms.connected)
-  {
-    return;
-  }
-
-  if(devparms.math_fft && devparms.math_fft_split)
-  {
-    devparms.math_fft_hcenter -= devparms.math_fft_hscale;
-
-    if(devparms.math_fft_hcenter <= 0.0)
-    {
-      devparms.math_fft_hcenter = 0.0;
-    }
-
-    if(devparms.modelserie != 1)
-    {
-      snprintf(str, 512, ":CALC:FFT:HCEN %e", devparms.math_fft_hcenter);
-    }
-    else
-    {
-      snprintf(str, 512, ":MATH:FFT:HCEN %e", devparms.math_fft_hcenter);
-    }
-
-    set_cue_cmd(str);
-
-    strlcpy(str, "FFT center: ", 512);
-
-    convert_to_metric_suffix(str + strlen(str), devparms.math_fft_hcenter, 0, 512 - strlen(str));
-
-    strlcat(str, "Hz", 512);
-
-    statusLabel->setText(str);
-
-    waveForm->update();
-
-    return;
-  }
-
-  if(devparms.activechannel < 0)
-  {
-    return;
-  }
-
-  if(devparms.timebasedelayenable)
-  {
-    if(devparms.timebasedelayoffset <= -(((devparms.hordivisions / 2) * devparms.timebasescale) - devparms.timebaseoffset - ((devparms.hordivisions / 2) * devparms.timebasedelayscale)))
-    {
-      return;
-    }
-
-    devparms.timebasedelayoffset -= devparms.timebasedelayscale;
-
-    if(devparms.timebasedelayoffset <= -(((devparms.hordivisions / 2) * devparms.timebasescale) - devparms.timebaseoffset - ((devparms.hordivisions / 2) * devparms.timebasedelayscale)))
-    {
-      devparms.timebasedelayoffset = -(((devparms.hordivisions / 2) * devparms.timebasescale) - devparms.timebaseoffset - ((devparms.hordivisions / 2) * devparms.timebasedelayscale));
-    }
-
-    strlcpy(str, "Delayed timebase position: ", 512);
-
-    convert_to_metric_suffix(str + strlen(str), devparms.timebasedelayoffset, 2, 512 - strlen(str));
-
-    strlcat(str, "s", 512);
-
-    statusLabel->setText(str);
-
-    horPosDial_timer->start(TMC_DIAL_TIMER_DELAY);
-  }
-  else
-  {
-    devparms.timebaseoffset -= devparms.timebasescale;
-
-    if(devparms.acquirememdepth > 10)
-    {
-      if(devparms.timebaseoffset <= -(((double)devparms.acquirememdepth / devparms.samplerate) / 2))
-      {
-        devparms.timebaseoffset = -(((double)devparms.acquirememdepth / devparms.samplerate) / 2);
-      }
-    }
-    else
-    {
-      if(devparms.timebaseoffset <= -((devparms.hordivisions / 2) * devparms.timebasescale))
-      {
-        devparms.timebaseoffset = -((devparms.hordivisions / 2) * devparms.timebasescale);
-      }
-    }
-
-    strlcpy(str, "Horizontal position: ", 512);
-
-    convert_to_metric_suffix(str + strlen(str), devparms.timebaseoffset, 2, 512 - strlen(str));
-
-    strlcat(str, "s", 512);
-
-    statusLabel->setText(str);
-
-    horPosDial_timer->start(TMC_DIAL_TIMER_DELAY);
-  }
-
-  waveForm->update();
-}
-
-
-void UI_Mainwindow::shift_page_right()
-{
-  char str[512];
-
-  if(device == NULL)
-  {
-    return;
-  }
-
-  if(!devparms.connected)
-  {
-    return;
-  }
-
-  if(devparms.math_fft && devparms.math_fft_split)
-  {
-    devparms.math_fft_hcenter += devparms.math_fft_hscale;
-
-    if(devparms.math_fft_hcenter >= (devparms.current_screen_sf * 0.4))
-    {
-      devparms.math_fft_hcenter = devparms.current_screen_sf * 0.4;
-    }
-
-    if(devparms.modelserie != 1)
-    {
-      snprintf(str, 512, ":CALC:FFT:HCEN %e", devparms.math_fft_hcenter);
-    }
-    else
-    {
-      snprintf(str, 512, ":MATH:FFT:HCEN %e", devparms.math_fft_hcenter);
-    }
-
-    set_cue_cmd(str);
-
-    strlcpy(str, "FFT center: ", 512);
-
-    convert_to_metric_suffix(str + strlen(str), devparms.math_fft_hcenter, 0, 512 - strlen(str));
-
-    strlcat(str, "Hz", 512);
-
-    statusLabel->setText(str);
-
-    waveForm->update();
-
-    return;
-  }
-
-  if(devparms.activechannel < 0)
-  {
-    return;
-  }
-
-  if(devparms.timebasedelayenable)
-  {
-    if(devparms.timebasedelayoffset >= (((devparms.hordivisions / 2) * devparms.timebasescale) + devparms.timebaseoffset - ((devparms.hordivisions / 2) * devparms.timebasedelayscale)))
-    {
-      return;
-    }
-
-    devparms.timebasedelayoffset += devparms.timebasedelayscale;
-
-    if(devparms.timebasedelayoffset >= (((devparms.hordivisions / 2) * devparms.timebasescale) + devparms.timebaseoffset - ((devparms.hordivisions / 2) * devparms.timebasedelayscale)))
-    {
-      devparms.timebasedelayoffset = (((devparms.hordivisions / 2) * devparms.timebasescale) + devparms.timebaseoffset - ((devparms.hordivisions / 2) * devparms.timebasedelayscale));
-    }
-
-    strlcpy(str, "Delayed timebase position: ", 512);
-
-    convert_to_metric_suffix(str + strlen(str), devparms.timebasedelayoffset, 2, 512 - strlen(str));
-
-    strlcat(str, "s", 512);
-
-    statusLabel->setText(str);
-
-    horPosDial_timer->start(TMC_DIAL_TIMER_DELAY);
-  }
-  else
-  {
-    devparms.timebaseoffset += devparms.timebasescale;
-
-    if(devparms.acquirememdepth > 10)
-    {
-      if(devparms.timebaseoffset >= (((double)devparms.acquirememdepth / devparms.samplerate) / 2))
-      {
-        devparms.timebaseoffset = (((double)devparms.acquirememdepth / devparms.samplerate) / 2);
-      }
-    }
-    else
-    {
-      if(devparms.timebaseoffset >= (devparms.hordivisions / 2) * devparms.timebasescale)
-      {
-        devparms.timebaseoffset = (devparms.hordivisions / 2) * devparms.timebasescale;
-      }
-    }
-
-    strlcpy(str, "Horizontal position: ", 512);
-
-    convert_to_metric_suffix(str + strlen(str), devparms.timebaseoffset, 2, 512 - strlen(str));
-
-    strlcat(str, "s", 512);
-
-    statusLabel->setText(str);
-
-    horPosDial_timer->start(TMC_DIAL_TIMER_DELAY);
-  }
-
-  waveForm->update();
-}
-
-
-void UI_Mainwindow::center_trigger()
-{
-  char str[512];
-
-  if(device == NULL)
-  {
-    return;
-  }
-
-  if(!devparms.connected)
-  {
-    return;
-  }
-
-  if(devparms.math_fft && devparms.math_fft_split)
-  {
-    devparms.math_fft_hcenter = 0;
-
-    if(devparms.modelserie != 1)
-    {
-      snprintf(str, 512, ":CALC:FFT:HCEN %e", devparms.math_fft_hcenter);
-    }
-    else
-    {
-      snprintf(str, 512, ":MATH:FFT:HCEN %e", devparms.math_fft_hcenter);
-    }
-
-    set_cue_cmd(str);
-
-    strlcpy(str, "FFT center: ", 512);
-
-    convert_to_metric_suffix(str + strlen(str), devparms.math_fft_hcenter, 0, 512 - strlen(str));
-
-    strlcat(str, "Hz", 512);
-
-    statusLabel->setText(str);
-
-    waveForm->update();
-
-    return;
-  }
-
-  if(devparms.activechannel < 0)
-  {
-    return;
-  }
-
-  if(devparms.timebasedelayenable)
-  {
-    devparms.timebasedelayoffset = 0;
-
-    strlcpy(str, "Delayed timebase position: ", 512);
-
-    convert_to_metric_suffix(str + strlen(str), devparms.timebasedelayoffset, 2, 512 - strlen(str));
-
-    strlcat(str, "s", 512);
-
-    statusLabel->setText(str);
-
-    horPosDial_timer->start(TMC_DIAL_TIMER_DELAY);
-  }
-  else
-  {
-    devparms.timebaseoffset = 0;
-
-    strlcpy(str, "Horizontal position: ", 512);
-
-    convert_to_metric_suffix(str + strlen(str), devparms.timebaseoffset, 2, 512 - strlen(str));
-
-    strlcat(str, "s", 512);
-
-    statusLabel->setText(str);
-
-    horPosDial_timer->start(TMC_DIAL_TIMER_DELAY);
-  }
-
-  waveForm->update();
-}
-
-
-void UI_Mainwindow::zoom_in()
-{
-  char str[512];
-
-  if(device == NULL)
-  {
-    return;
-  }
-
-  if(!devparms.connected)
-  {
-    return;
-  }
-
-  if(devparms.activechannel < 0)
-  {
-    return;
-  }
-
-  if(devparms.math_fft && devparms.math_fft_split)
-  {
-    if(!dblcmp(devparms.math_fft_hscale, devparms.current_screen_sf / 200.0))
-    {
-      return;
-    }
-
-    if(!dblcmp(devparms.math_fft_hscale, devparms.current_screen_sf / 20.0))
-    {
-      devparms.math_fft_hscale = devparms.current_screen_sf / 40.0;
-    }
-    else if(!dblcmp(devparms.math_fft_hscale, devparms.current_screen_sf / 40.0))
-      {
-        devparms.math_fft_hscale = devparms.current_screen_sf / 100.0;
-      }
-      else
-      {
-        devparms.math_fft_hscale = devparms.current_screen_sf / 200.0;
-      }
-
-    if(devparms.modelserie != 1)
-    {
-      snprintf(str, 512, ":CALC:FFT:HSP %e", devparms.math_fft_hscale);
-    }
-    else
-    {
-      snprintf(str, 512, ":MATH:FFT:HSC %e", devparms.math_fft_hscale);
-    }
-
-    set_cue_cmd(str);
-
-    strlcpy(str, "FFT scale: ", 512);
-
-    convert_to_metric_suffix(str + strlen(str), devparms.math_fft_hscale, 0, 512 - strlen(str));
-
-    strlcat(str, "Hz/Div", 512);
-
-    statusLabel->setText(str);
-
-    waveForm->update();
-
-    return;
-  }
-
-  if(devparms.activechannel < 0)
-  {
-    return;
-  }
-
-  if(devparms.timebasedelayenable)
-  {
-    if(devparms.modelserie == 1)
-    {
-      if(devparms.timebasescale <= 5.001e-9)
-      {
-        devparms.timebasescale = 5e-9;
-
-        return;
-      }
-    }
-    else
-    {
-      if(devparms.bandwidth == 1000)
-      {
-        if(devparms.timebasedelayscale <= 5.001e-10)
-        {
-          devparms.timebasedelayscale = 5e-10;
-
-          return;
-        }
-      }
-      else
-      {
-        if(devparms.timebasedelayscale <= 1.001e-9)
-        {
-          devparms.timebasedelayscale = 1e-9;
-
-          return;
-        }
-      }
-    }
-
-    devparms.timebasedelayscale = round_down_step125(devparms.timebasedelayscale, NULL);
-
-    devparms.current_screen_sf = 100.0 / devparms.timebasedelayscale;
-
-    strlcpy(str, "Delayed timebase: ", 512);
-
-    convert_to_metric_suffix(str + strlen(str), devparms.timebasedelayscale, 2, 512 - strlen(str));
-
-    strlcat(str, "s", 512);
-
-    statusLabel->setText(str);
-
-    snprintf(str, 512, ":TIM:DEL:SCAL %e", devparms.timebasedelayscale);
-
-    set_cue_cmd(str);
-  }
-  else
-  {
-    if(devparms.modelserie == 1)
-    {
-      if(devparms.timebasescale <= 5.001e-9)
-      {
-        devparms.timebasescale = 5e-9;
-
-        return;
-      }
-    }
-    else
-    {
-      if(devparms.bandwidth == 1000)
-      {
-        if(devparms.timebasescale <= 5.001e-10)
-        {
-          devparms.timebasescale = 5e-10;
-
-          return;
-        }
-      }
-      else
-      {
-        if(devparms.timebasescale <= 1.001e-9)
-        {
-          devparms.timebasescale = 1e-9;
-
-          return;
-        }
-      }
-    }
-
-    devparms.timebasescale = round_down_step125(devparms.timebasescale, NULL);
-
-    devparms.current_screen_sf = 100.0 / devparms.timebasescale;
-
-    strlcpy(str, "Timebase: ", 512);
-
-    convert_to_metric_suffix(str + strlen(str), devparms.timebasescale, 2, 512 - strlen(str));
-
-    strlcat(str, "s", 512);
-
-    statusLabel->setText(str);
-
-    snprintf(str, 512, ":TIM:SCAL %e", devparms.timebasescale);
-
-    set_cue_cmd(str);
-  }
-
-  waveForm->update();
-}
-
-
-void UI_Mainwindow::zoom_out()
-{
-  char str[512];
-
-  if(device == NULL)
-  {
-    return;
-  }
-
-  if(!devparms.connected)
-  {
-    return;
-  }
-
-  if(devparms.activechannel < 0)
-  {
-    return;
-  }
-
-  if(devparms.math_fft && devparms.math_fft_split)
-  {
-    if(!dblcmp(devparms.math_fft_hscale, devparms.current_screen_sf / 20.0))
-    {
-      return;
-    }
-
-    if(!dblcmp(devparms.math_fft_hscale, devparms.current_screen_sf / 200.0))
-    {
-      devparms.math_fft_hscale = devparms.current_screen_sf / 100.0;
-    }
-    else if(!dblcmp(devparms.math_fft_hscale, devparms.current_screen_sf / 100.0))
-      {
-        devparms.math_fft_hscale = devparms.current_screen_sf / 40.0;
-      }
-      else
-      {
-        devparms.math_fft_hscale = devparms.current_screen_sf / 20.0;
-      }
-
-    if(devparms.modelserie != 1)
-    {
-      snprintf(str, 512, ":CALC:FFT:HSP %e", devparms.math_fft_hscale);
-    }
-    else
-    {
-      snprintf(str, 512, ":MATH:FFT:HSC %e", devparms.math_fft_hscale);
-    }
-
-    set_cue_cmd(str);
-
-    strlcpy(str, "FFT scale: ", 512);
-
-    convert_to_metric_suffix(str + strlen(str), devparms.math_fft_hscale, 0, 512 - strlen(str));
-
-    strlcat(str, "Hz/Div", 512);
-
-    statusLabel->setText(str);
-
-    waveForm->update();
-
-    return;
-  }
-
-  if(devparms.timebasedelayenable)
-  {
-    if(devparms.timebasedelayscale >= devparms.timebasescale / 2)
-    {
-      devparms.timebasedelayscale = devparms.timebasescale / 2;
-
-      return;
-    }
-
-    if(devparms.timebasedelayscale >= 0.1)
-    {
-      devparms.timebasedelayscale = 0.1;
-
-      return;
-    }
-
-    devparms.timebasedelayscale = round_up_step125(devparms.timebasedelayscale, NULL);
-
-    devparms.current_screen_sf = 100.0 / devparms.timebasedelayscale;
-
-    strlcpy(str, "Delayed timebase: ", 512);
-
-    convert_to_metric_suffix(str + strlen(str), devparms.timebasedelayscale, 2, 512 - strlen(str));
-
-    strlcat(str, "s", 512);
-
-    statusLabel->setText(str);
-
-    snprintf(str, 512, ":TIM:DEL:SCAL %e", devparms.timebasedelayscale);
-
-    set_cue_cmd(str);
-
-    if(devparms.timebasedelayscale > 0.1000001)
-    {
-      devparms.func_wrec_enable = 0;
-    }
-  }
-  else
-  {
-    if(devparms.timebasescale >= 10)
-    {
-      devparms.timebasescale = 10;
-
-      return;
-    }
-
-    devparms.timebasescale = round_up_step125(devparms.timebasescale, NULL);
-
-    devparms.current_screen_sf = 100.0 / devparms.timebasescale;
-
-    strlcpy(str, "Timebase: ", 512);
-
-    convert_to_metric_suffix(str + strlen(str), devparms.timebasescale, 2, 512 - strlen(str));
-
-    strlcat(str, "s", 512);
-
-    statusLabel->setText(str);
-
-    snprintf(str, 512, ":TIM:SCAL %e", devparms.timebasescale);
-
-    set_cue_cmd(str);
-
-    if(devparms.timebasescale > 0.1000001)
-    {
-      devparms.func_wrec_enable = 0;
-    }
-  }
-
-  waveForm->update();
-}
-
-
-void UI_Mainwindow::chan_scale_plus()
-{
-  int chn;
-
-  double val, ltmp;
-
-  char str[512];
-
-  if(device == NULL)
-  {
-    return;
-  }
-
-  if(!devparms.connected)
-  {
-    return;
-  }
-
-  if(devparms.activechannel < 0)
-  {
-    return;
-  }
-
-  if(devparms.math_fft && devparms.math_fft_split)
-  {
-    devparms.fft_vscale = round_up_step125(devparms.fft_vscale, NULL);
-
-    if(devparms.math_fft_unit == 0)
-    {
-      if(devparms.fft_vscale > 50.0)
-      {
-        devparms.fft_vscale = 50.0;
-      }
-    }
-    else
-    {
-      if(devparms.fft_vscale > 20.0)
-      {
-        devparms.fft_vscale = 20.0;
-      }
-    }
-
-    if(devparms.fft_voffset > (devparms.fft_vscale * 4.0))
-    {
-      devparms.fft_voffset = (devparms.fft_vscale * 4.0);
-    }
-
-    if(devparms.fft_voffset < (devparms.fft_vscale * -4.0))
-    {
-      devparms.fft_voffset = (devparms.fft_vscale * -4.0);
-    }
-
-    if(devparms.modelserie != 1)
-    {
-      if(devparms.math_fft_unit == 1)
-      {
-        snprintf(str, 512, ":CALC:FFT:VSC %e", devparms.fft_vscale);
-
-        set_cue_cmd(str);
-      }
-      else
-      {
-        snprintf(str, 512, ":CALC:FFT:VSC %e", devparms.fft_vscale / devparms.chanscale[devparms.math_fft_src]);
-
-        set_cue_cmd(str);
-      }
-    }
-    else
-    {
-      snprintf(str, 512, ":MATH:SCAL %e", devparms.fft_vscale);
-
-      set_cue_cmd(str);
-    }
-
-    if(devparms.math_fft_unit == 0)
-    {
-      strlcpy(str, "FFT scale: ", 512);
-
-      convert_to_metric_suffix(str + strlen(str), devparms.fft_vscale, 1, 512 - strlen(str));
-
-      strlcat(str, "V/Div", 512);
-    }
-    else
-    {
-      snprintf(str, 512, "FFT scale: %.1fdB/Div", devparms.fft_vscale);
-    }
-
-    statusLabel->setText(str);
-
-    waveForm->update();
-
-    return;
-  }
-
-  chn = devparms.activechannel;
-
-  if(devparms.chanscale[chn] >= 20)
-  {
-    devparms.chanscale[chn] = 20;
-
-    return;
-  }
-
-  ltmp = devparms.chanscale[chn];
-
-  val = round_up_step125(devparms.chanscale[chn], NULL);
-
-  if(devparms.chanvernier[chn])
-  {
-    val /= 100;
-
-    devparms.chanscale[chn] += val;
-  }
-  else
-  {
-    devparms.chanscale[chn] = val;
-  }
-
-  ltmp /= val;
-
-  devparms.chanoffset[chn] /= ltmp;
-
-  snprintf(str, 512, "Channel %i scale: ", chn + 1);
-
-  convert_to_metric_suffix(str + strlen(str), devparms.chanscale[chn], 2, 512 - strlen(str));
-
-  strlcat(str, "V", 512);
-
-  statusLabel->setText(str);
-
-  snprintf(str, 512, ":CHAN%i:SCAL %e", chn + 1, devparms.chanscale[chn]);
-
-  set_cue_cmd(str);
-
-  waveForm->update();
-}
-
-
-void UI_Mainwindow::chan_scale_plus_all()
-{
-  int chn;
-
-  double val, ltmp;
-
-  char str[512];
-
-  if(device == NULL)
-  {
-    return;
-  }
-
-  if(!devparms.connected)
-  {
-    return;
-  }
-
-  if(devparms.activechannel < 0)
-  {
-    return;
-  }
-
-  if(devparms.math_fft && devparms.math_fft_split)
-  {
-    return;
-  }
-
-  for(chn=0; chn<devparms.channel_cnt; chn++)
-  {
-    if(!devparms.chandisplay[chn])  continue;
-
-    if(devparms.chanscale[chn] >= 20)
-    {
-      devparms.chanscale[chn] = 20;
-
-      return;
-    }
-
-    ltmp = devparms.chanscale[chn];
-
-    val = round_up_step125(devparms.chanscale[chn], NULL);
-
-    if(devparms.chanvernier[chn])
-    {
-      val /= 100;
-
-      devparms.chanscale[chn] += val;
-    }
-    else
-    {
-      devparms.chanscale[chn] = val;
-    }
-
-    ltmp /= val;
-
-    devparms.chanoffset[chn] /= ltmp;
-
-    snprintf(str, 512, "Channel %i scale: ", chn + 1);
-
-    convert_to_metric_suffix(str + strlen(str), devparms.chanscale[chn], 2, 512 - strlen(str));
-
-    strlcat(str, "V", 512);
-
-    statusLabel->setText(str);
-
-    snprintf(str, 512, ":CHAN%i:SCAL %e", chn + 1, devparms.chanscale[chn]);
-
-    set_cue_cmd(str);
-  }
-
-  waveForm->update();
-}
-
-
-void UI_Mainwindow::chan_scale_minus()
-{
-  int chn;
-
-  double val, ltmp;
-
-  char str[512];
-
-  if(device == NULL)
-  {
-    return;
-  }
-
-  if(!devparms.connected)
-  {
-    return;
-  }
-
-  if(devparms.activechannel < 0)
-  {
-    return;
-  }
-
-  if(devparms.math_fft && devparms.math_fft_split)
-  {
-    devparms.fft_vscale = round_down_step125(devparms.fft_vscale, NULL);
-
-    if(devparms.math_fft_unit == 0)
-    {
-      if(devparms.fft_vscale < 1.0)
-      {
-        devparms.fft_vscale = 1.0;
-      }
-    }
-    else
-    {
-      if(devparms.fft_vscale < 1.0)
-      {
-        devparms.fft_vscale = 1.0;
-      }
-    }
-
-    if(devparms.fft_voffset > (devparms.fft_vscale * 4.0))
-    {
-      devparms.fft_voffset = (devparms.fft_vscale * 4.0);
-    }
-
-    if(devparms.fft_voffset < (devparms.fft_vscale * -4.0))
-    {
-      devparms.fft_voffset = (devparms.fft_vscale * -4.0);
-    }
-
-    if(devparms.modelserie != 1)
-    {
-      if(devparms.math_fft_unit == 1)
-      {
-        snprintf(str, 512, ":CALC:FFT:VSC %e", devparms.fft_vscale);
-
-        set_cue_cmd(str);
-      }
-      else
-      {
-        snprintf(str, 512, ":CALC:FFT:VSC %e", devparms.fft_vscale / devparms.chanscale[devparms.math_fft_src]);
-
-        set_cue_cmd(str);
-      }
-    }
-    else
-    {
-      snprintf(str, 512, ":MATH:SCAL %e", devparms.fft_vscale);
-
-      set_cue_cmd(str);
-    }
-
-    if(devparms.math_fft_unit == 0)
-    {
-      strlcpy(str, "FFT scale: ", 512);
-
-      convert_to_metric_suffix(str + strlen(str), devparms.fft_vscale, 1, 512 - strlen(str));
-
-      strlcat(str, "V/Div", 512);
-    }
-    else
-    {
-      snprintf(str, 512, "FFT scale: %.1fdB/Div", devparms.fft_vscale);
-    }
-
-    statusLabel->setText(str);
-
-    waveForm->update();
-
-    return;
-  }
-
-  chn = devparms.activechannel;
-
-  if(devparms.chanscale[chn] <= 1e-2)
-  {
-    devparms.chanscale[chn] = 1e-2;
-
-    return;
-  }
-
-  ltmp = devparms.chanscale[chn];
-
-  if(devparms.chanvernier[chn])
-  {
-    val = round_up_step125(devparms.chanscale[chn], NULL);
-  }
-  else
-  {
-    val = round_down_step125(devparms.chanscale[chn], NULL);
-  }
-
-  if(devparms.chanvernier[chn])
-  {
-    val /= 100;
-
-    devparms.chanscale[chn] -= val;
-  }
-  else
-  {
-    devparms.chanscale[chn] = val;
-  }
-
-  ltmp /= val;
-
-  devparms.chanoffset[chn] /= ltmp;
-
-  snprintf(str, 512, "Channel %i scale: ", chn + 1);
-
-  convert_to_metric_suffix(str + strlen(str), devparms.chanscale[chn], 2, 512 - strlen(str));
-
-  strlcat(str, "V", 512);
-
-  statusLabel->setText(str);
-
-  snprintf(str, 512, ":CHAN%i:SCAL %e", chn + 1, devparms.chanscale[chn]);
-
-  set_cue_cmd(str);
-
-  waveForm->update();
-}
-
-
-void UI_Mainwindow::chan_scale_minus_all()
-{
-  int chn;
-
-  double val, ltmp;
-
-  char str[512];
-
-  if(device == NULL)
-  {
-    return;
-  }
-
-  if(!devparms.connected)
-  {
-    return;
-  }
-
-  if(devparms.activechannel < 0)
-  {
-    return;
-  }
-
-  if(devparms.math_fft && devparms.math_fft_split)
-  {
-    return;
-  }
-
-  for(chn=0; chn<devparms.channel_cnt; chn++)
-  {
-    if(!devparms.chandisplay[chn])  continue;
-
-    if(devparms.chanscale[chn] <= 1e-2)
-    {
-      devparms.chanscale[chn] = 1e-2;
-
-      return;
-    }
-
-    ltmp = devparms.chanscale[chn];
-
-    if(devparms.chanvernier[chn])
-    {
-      val = round_up_step125(devparms.chanscale[chn], NULL);
-    }
-    else
-    {
-      val = round_down_step125(devparms.chanscale[chn], NULL);
-    }
-
-    if(devparms.chanvernier[chn])
-    {
-      val /= 100;
-
-      devparms.chanscale[chn] -= val;
-    }
-    else
-    {
-      devparms.chanscale[chn] = val;
-    }
-
-    ltmp /= val;
-
-    devparms.chanoffset[chn] /= ltmp;
-
-    snprintf(str, 512, "Channel %i scale: ", chn + 1);
-
-    convert_to_metric_suffix(str + strlen(str), devparms.chanscale[chn], 2, 512 - strlen(str));
-
-    strlcat(str, "V", 512);
-
-    statusLabel->setText(str);
-
-    snprintf(str, 512, ":CHAN%i:SCAL %e", chn + 1, devparms.chanscale[chn]);
-
-    set_cue_cmd(str);
-  }
-
-  waveForm->update();
-}
-
-
-void UI_Mainwindow::shift_trace_up()
-{
-  int chn;
-
-  char str[512];
-
-  if(device == NULL)
-  {
-    return;
-  }
-
-  if(!devparms.connected)
-  {
-    return;
-  }
-
-  if(devparms.activechannel < 0)
-  {
-    return;
-  }
-
-  if(devparms.math_fft && devparms.math_fft_split)
-  {
-    devparms.fft_voffset += devparms.fft_vscale;
-
-    if(devparms.fft_voffset > (devparms.fft_vscale * 4.0))
-    {
-      devparms.fft_voffset = (devparms.fft_vscale * 4.0);
-    }
-
-    if(devparms.math_fft_unit && (devparms.fft_vscale > 9.9))
-    {
-      devparms.fft_voffset = nearbyint(devparms.fft_voffset);
-    }
-
-    if(devparms.modelserie != 1)
-    {
-      snprintf(str, 512, ":CALC:FFT:VOFF %e", devparms.fft_voffset);
-
-      set_cue_cmd(str);
-    }
-    else
-    {
-      snprintf(str, 512, ":MATH:OFFS %e", devparms.fft_voffset);
-
-      set_cue_cmd(str);
-    }
-
-    if(devparms.math_fft_unit == 0)
-    {
-      strlcpy(str, "FFT position: ", 512);
-
-      convert_to_metric_suffix(str + strlen(str), devparms.fft_voffset, 1, 512 - strlen(str));
-
-      strlcat(str, "V", 512);
-    }
-    else
-    {
-      snprintf(str, 512, "FFT position: %+.0fdB", devparms.fft_voffset);
-    }
-
-    statusLabel->setText(str);
-
-    waveForm->label_active = LABEL_ACTIVE_FFT;
-
-    label_timer->start(LABEL_TIMER_IVAL);
-
-    waveForm->update();
-
-    return;
-  }
-
-  chn = devparms.activechannel;
-
-  if(devparms.chanoffset[chn] >= 20)
-  {
-    devparms.chanoffset[chn] = 20;
-
-    return;
-  }
-
-  devparms.chanoffset[chn] += devparms.chanscale[chn];
-
-  snprintf(str, 512, "Channel %i offset: ", chn + 1);
-
-  convert_to_metric_suffix(str + strlen(str), devparms.chanoffset[chn], 2, 512 - strlen(str));
-
-  strlcat(str, devparms.chanunitstr[devparms.chanunit[chn]], 512);
-
-  statusLabel->setText(str);
-
-  waveForm->label_active = chn + 1;
-
-  label_timer->start(LABEL_TIMER_IVAL);
-
-  vertOffsDial_timer->start(TMC_DIAL_TIMER_DELAY);
-
-  waveForm->update();
-}
-
-
-void UI_Mainwindow::shift_trace_down()
-{
-  int chn;
-
-  char str[512];
-
-  if(device == NULL)
-  {
-    return;
-  }
-
-  if(!devparms.connected)
-  {
-    return;
-  }
-
-  if(devparms.activechannel < 0)
-  {
-    return;
-  }
-
-  if(devparms.math_fft && devparms.math_fft_split)
-  {
-    devparms.fft_voffset -= devparms.fft_vscale;
-
-    if(devparms.fft_voffset < (devparms.fft_vscale * -4.0))
-    {
-      devparms.fft_voffset = (devparms.fft_vscale * -4.0);
-    }
-
-    if(devparms.math_fft_unit)
-    {
-      if(devparms.fft_vscale > 9.0)
-      {
-        devparms.fft_voffset = nearbyint(devparms.fft_voffset);
-      }
-      else
-      {
-        devparms.fft_voffset = nearbyint(devparms.fft_voffset * 10.0) / 10.0;
-      }
-    }
-
-    if(devparms.modelserie != 1)
-    {
-      snprintf(str, 512, ":CALC:FFT:VOFF %e", devparms.fft_voffset);
-
-      set_cue_cmd(str);
-    }
-    else
-    {
-      snprintf(str, 512, ":MATH:OFFS %e", devparms.fft_voffset);
-
-      set_cue_cmd(str);
-    }
-
-    if(devparms.math_fft_unit == 0)
-    {
-      strlcpy(str, "FFT position: ", 512);
-
-      convert_to_metric_suffix(str + strlen(str), devparms.fft_voffset, 1, 512 - strlen(str));
-
-      strlcat(str, "V", 512);
-    }
-    else
-    {
-      snprintf(str, 512, "FFT position: %+.0fdB", devparms.fft_voffset);
-    }
-
-    statusLabel->setText(str);
-
-    waveForm->label_active = LABEL_ACTIVE_FFT;
-
-    label_timer->start(LABEL_TIMER_IVAL);
-
-    waveForm->update();
-
-    return;
-  }
-
-  chn = devparms.activechannel;
-
-  if(devparms.chanoffset[chn] <= -20)
-  {
-    devparms.chanoffset[chn] = -20;
-
-    return;
-  }
-
-  devparms.chanoffset[chn] -= devparms.chanscale[chn];
-
-  snprintf(str, 512, "Channel %i offset: ", chn + 1);
-
-  convert_to_metric_suffix(str + strlen(str), devparms.chanoffset[chn], 2, 512 - strlen(str));
-
-  strlcat(str, devparms.chanunitstr[devparms.chanunit[chn]], 512);
-
-  statusLabel->setText(str);
-
-  waveForm->label_active = chn + 1;
-
-  label_timer->start(LABEL_TIMER_IVAL);
-
-  vertOffsDial_timer->start(TMC_DIAL_TIMER_DELAY);
-
-  waveForm->update();
-}
-
-
-void UI_Mainwindow::set_to_factory()
-{
-  int i;
-
-  char str[512];
-
-  if((device == NULL) || (!devparms.connected))
-  {
-    return;
-  }
-
-  QMessageBox msgBox2;
-  msgBox2.setText("Do you want to reset the instrument to the factory settings?");
-  msgBox2.setStandardButtons(QMessageBox::No | QMessageBox::Yes);
-  msgBox2.setDefaultButton(QMessageBox::No);
-  if(msgBox2.exec() != QMessageBox::Yes)  return;
-
-  scrn_timer->stop();
-
-  scrn_thread->wait();
-
-  tmc_write("*RST");
-
-  devparms.timebasescale = 1e-6;
-
-  devparms.timebaseoffset = 0;
-
-  devparms.timebasedelayenable = 0;
-
-  devparms.timebasedelayoffset = 0;
-
-  for(i=0; i<MAX_CHNS; i++)
-  {
-    devparms.chanscale[i] = 1;
-
-    devparms.chanoffset[i] = 0;
-
-    devparms.chandisplay[i] = 0;
-
-    devparms.chancoupling[i] = 1;
-
-    devparms.chanbwlimit[i] = 0;
-
-    devparms.chanprobe[i] = 10;
-
-    devparms.chaninvert[i] = 0;
-
-    devparms.chanvernier[i] = 0;
-
-    devparms.triggeredgelevel[i] = 0;
-  }
-
-  devparms.chandisplay[0] = 1;
-
-  devparms.activechannel = 0;
-
-  devparms.acquiretype = 0;
-
-  devparms.acquirememdepth = 0;
-
-  devparms.triggermode = 0;
-
-  devparms.triggeredgesource = 0;
-
-  devparms.triggeredgeslope = 0;
-
-  devparms.triggerstatus = 3;
-
-  devparms.triggercoupling = 1;
-
-  if(devparms.modelserie == 1)
-  {
-    devparms.triggerholdoff = 1.6e-8;
-  }
-  else
-  {
-    devparms.triggerholdoff = 1e-7;
-  }
-
-  devparms.displaytype = 0;
-
-  devparms.displaygrid = 2;
-
-  devparms.countersrc = 0;
-
-  devparms.func_wrec_enable = 0;
-
-  statusLabel->setText("Reset to factory settings");
-
-  waveForm->update();
-
-  QMessageBox msgBox;
-  msgBox.setText("Resetting the instrument to the factory settings.\n"
-                 "Please wait...");
-
-  QTimer t_rst_1;
-  t_rst_1.setSingleShot(true);
-#if QT_VERSION >= 0x050000
-  t_rst_1.setTimerType(Qt::PreciseTimer);
-#endif
-  connect(&t_rst_1, SIGNAL(timeout()), &msgBox, SLOT(accept()));
-  t_rst_1.start(9000);
-
-  msgBox.exec();
-
-  if(devparms.modelserie == 6)
-  {
-    for(i=0; i<MAX_CHNS; i++)
-    {
-      snprintf(str, 512, ":CHAN%i:SCAL 1", i + 1);
-
-      tmc_write(str);
-
-      usleep(20000);
-    }
-  }
-
-  scrn_timer->start(devparms.screentimerival);
-}
-
-
-// this function is called when screen_thread has finished
-void UI_Mainwindow::screenUpdate()
-{
-  int i, chns=0;
-
-  char str[512];
-
-  if(device == NULL)
-  {
-    pthread_mutex_unlock(&devparms.mutexx);
-
-    return;
-  }
-
-  if(!devparms.connected)
-  {
-    pthread_mutex_unlock(&devparms.mutexx);
-
-    return;
-  }
-
-  if(!devparms.screenupdates_on)
-  {
-    pthread_mutex_unlock(&devparms.mutexx);
-
-    return;
-  }
-
-  scrn_thread->get_params(&devparms);
-
-  if(devparms.thread_error_stat)
-  {
-    scrn_timer->stop();
-
-    snprintf(str, 512, "An error occurred while reading screen data from device.\n"
-                "File screen_thread.cpp line %i", devparms.thread_error_line);
-
-    QMessageBox msgBox;
-    msgBox.setIcon(QMessageBox::Critical);
-    msgBox.setText(str);
-    msgBox.exec();
-
-    pthread_mutex_unlock(&devparms.mutexx);
-
-    close_connection();
-
-    return;
-  }
-
-  if(devparms.thread_result == TMC_THRD_RESULT_NONE)
-  {
-    pthread_mutex_unlock(&devparms.mutexx);
-
-    return;
-  }
-
-  if(devparms.thread_result == TMC_THRD_RESULT_CMD)
-  {
-    if(devparms.thread_job == TMC_THRD_JOB_TRIGEDGELEV)
-    {
-      devparms.triggeredgelevel[devparms.triggeredgesource] = devparms.thread_value;
-
-//      waveForm->setTrigLineVisible();
-    }
-
-    pthread_mutex_unlock(&devparms.mutexx);
-
-    return;
-  }
-
-  if(scrn_timer->isActive() == false)
-  {
-    pthread_mutex_unlock(&devparms.mutexx);
-
-    return;
-  }
-
-  runButton->setStyleSheet(def_stylesh);
-
-  singleButton->setStyleSheet(def_stylesh);
-
-  if(devparms.triggerstatus == 0)
-  {
-    runButton->setStyleSheet("background: #66FF99;");
-  }
-  else if(devparms.triggerstatus == 1)
-    {
-      singleButton->setStyleSheet("background: #FF9966;");
-    }
-    else if(devparms.triggerstatus == 2)
-      {
-        runButton->setStyleSheet("background: #66FF99;");
-      }
-      else if(devparms.triggerstatus == 3)
-        {
-          runButton->setStyleSheet("background: #66FF99;");
-        }
-        else if(devparms.triggerstatus == 5)
-          {
-            runButton->setStyleSheet("background: #FF0066;");
-          }
-
-  if(devparms.triggersweep == 0)
-  {
-    trigModeAutoLed->setValue(true);
-    trigModeNormLed->setValue(false);
-    trigModeSingLed->setValue(false);
-  }
-  else if(devparms.triggersweep == 1)
-    {
-      trigModeAutoLed->setValue(false);
-      trigModeNormLed->setValue(true);
-      trigModeSingLed->setValue(false);
-    }
-    else if(devparms.triggersweep == 2)
-      {
-        trigModeAutoLed->setValue(false);
-        trigModeNormLed->setValue(false);
-        trigModeSingLed->setValue(true);
-      }
-
-  if(waveForm->hasMoveEvent() == true)
-  {
-    pthread_mutex_unlock(&devparms.mutexx);
-
-    return;
-  }
-
-  for(i=0; i<MAX_CHNS; i++)
-  {
-    if(!devparms.chandisplay[i])  // Display data only when channel is switched on
-    {
-      continue;
-    }
-
-    chns++;
-  }
-
-  if(!chns)
-  {
+void UiMainWindow::closeConnection() {
+    DPRwidget->setEnabled(false);
+    testTimer->stop();
+    scrnTimer->stop();
+    adjdialTimer->stop();
+    devParms.connected = 0;
+    if(scrnThread->wait(5000) == false) {
+        scrnThread->terminate();
+        scrnThread->wait(5000);
+        pthread_mutex_trylock(&devParms.mutexx);
+        pthread_mutex_unlock(&devParms.mutexx);
+        scrnThread->hBusy = 0;
+    }
+
+    devParms.screenupdatesOn = 0;
+    setWindowTitle(PROGRAM_NAME " " PROGRAM_VERSION);
+    strlcpy(devParms.modelName, "-----", 128);
+    adjDialFunc = ADJ_DIAL_FUNC_NONE;
+    navDialFunc = NAV_DIAL_FUNC_NONE;
+    disconnect(adjDial, &Dial::valueChanged,
+        this, &UiMainWindow::adjDialChanged);
+    disconnect(trigAdjustDial, &Dial::valueChanged,
+        this, &UiMainWindow::trigAdjustDialChanged);
+    disconnect(horScaleDial, &Dial::valueChanged,
+        this, &UiMainWindow::horScaleDialChanged);
+    disconnect(horPosDial, &Dial::valueChanged,
+        this, &UiMainWindow::horPosDialChanged);
+    disconnect(vertOffsetDial, &Dial::valueChanged,
+        this, &UiMainWindow::vertOffsetDialChanged);
+    disconnect(vertScaleDial, &Dial::valueChanged,
+        this, &UiMainWindow::vertScaleDialChanged);
+    disconnect(navDial, &Dial::valueChanged,
+        this, &UiMainWindow::navDialChanged);
+    disconnect(ch1Button, &QPushButton::clicked,
+        this, &UiMainWindow::ch1ButtonClicked);
+    disconnect(ch2Button, &QPushButton::clicked,
+        this, &UiMainWindow::ch2ButtonClicked);
+    disconnect(ch3Button, &QPushButton::clicked,
+        this, &UiMainWindow::ch3ButtonClicked);
+    disconnect(ch4Button, &QPushButton::clicked,
+        this, &UiMainWindow::ch4ButtonClicked);
+    disconnect(chanMenuButton, &QPushButton::clicked,
+        this, &UiMainWindow::chanMenu);
+    disconnect(mathMenuButton, &QPushButton::clicked,
+        this, &UiMainWindow::mathMenu);
+    disconnect(waveForm, &SignalCurve::chan1Clicked,
+        this, &UiMainWindow::ch1ButtonClicked);
+    disconnect(waveForm, &SignalCurve::chan2Clicked,
+        this, &UiMainWindow::ch2ButtonClicked);
+    disconnect(waveForm, &SignalCurve::chan3Clicked,
+        this, &UiMainWindow::ch3ButtonClicked);
+    disconnect(waveForm, &SignalCurve::chan4Clicked,
+        this, &UiMainWindow::ch4ButtonClicked);
+    disconnect(clearButton, &QPushButton::clicked,
+        this, &UiMainWindow::clearButtonClicked);
+    disconnect(autoButton, &QPushButton::clicked,
+        this, &UiMainWindow::autoButtonClicked);
+    disconnect(runButton, &QPushButton::clicked,
+        this, &UiMainWindow::runButtonClicked);
+    disconnect(singleButton, &QPushButton::clicked,
+        this, &UiMainWindow::singleButtonClicked);
+    disconnect(horMenuButton, &QPushButton::clicked,
+        this, &UiMainWindow::horMenuButtonClicked);
+    disconnect(trigModeButton, &QPushButton::clicked,
+        this, &UiMainWindow::trigModeButtonClicked);
+    disconnect(trigMenuButton, &QPushButton::clicked,
+        this, &UiMainWindow::trigMenuButtonClicked);
+    disconnect(trigForceButton, &QPushButton::clicked,
+        this, &UiMainWindow::trigForceButtonClicked);
+    disconnect(trig50pctButton, &QPushButton::clicked,
+        this, &UiMainWindow::trig50pctButtonClicked);
+    disconnect(acqButton, &QPushButton::clicked,
+        this, &UiMainWindow::acqButtonClicked);
+    disconnect(cursButton, &QPushButton::clicked,
+        this, &UiMainWindow::cursButtonClicked);
+    disconnect(saveButton, &QPushButton::clicked,
+        this, &UiMainWindow::saveButtonClicked);
+    disconnect(dispButton, &QPushButton::clicked,
+        this, &UiMainWindow::dispButtonClicked);
+    disconnect(utilButton, &QPushButton::clicked,
+        this, &UiMainWindow::utilButtonClicked);
+    disconnect(helpButton, &QPushButton::clicked,
+        this, &UiMainWindow::helpButtonClicked);
+    disconnect(measureButton, &QPushButton::clicked,
+        this, &UiMainWindow::measureButtonClicked);
+    disconnect(selectChan1Act, &QAction::triggered,
+        this, &UiMainWindow::ch1ButtonClicked);
+    disconnect(selectChan2Act, &QAction::triggered,
+        this, &UiMainWindow::ch2ButtonClicked);
+    disconnect(selectChan3Act, &QAction::triggered,
+        this, &UiMainWindow::ch3ButtonClicked);
+    disconnect(selectChan4Act, &QAction::triggered,
+        this, &UiMainWindow::ch4ButtonClicked);
+    disconnect(toggleFftAct, &QAction::triggered,
+        this, &UiMainWindow::toggleFft);
+    disconnect(horPosDial, &Dial::customContextMenuRequested,
+        this, &UiMainWindow::horPosDialClicked);
+    disconnect(vertOffsetDial, &Dial::customContextMenuRequested,
+        this, &UiMainWindow::vertOffsetDialClicked);
+    disconnect(horScaleDial, &Dial::customContextMenuRequested,
+        this, &UiMainWindow::horScaleDialClicked);
+    disconnect(vertScaleDial, &Dial::customContextMenuRequested,
+        this, &UiMainWindow::vertScaleDialClicked);
+    disconnect(trigAdjustDial, &Dial::customContextMenuRequested,
+        this, &UiMainWindow::trigAdjustDialClicked);
+    disconnect(adjDial, &Dial::customContextMenuRequested,
+        this, &UiMainWindow::adjustDialClicked);
+    disconnect(playpauseButton, &QPushButton::clicked,
+        this, &UiMainWindow::playpauseButtonClicked);
+    disconnect(stopButton, &QPushButton::clicked,
+        this, &UiMainWindow::stopButtonClicked);
+    disconnect(recordButton, &QPushButton::clicked,
+        this, &UiMainWindow::recordButtonClicked);
+    scrnThread->setDevice(nullptr);
+    devParms.mathFft = 0;
+    devParms.mathFftSplit = 0;
     waveForm->clear();
-
-    pthread_mutex_unlock(&devparms.mutexx);
-
-    return;
-  }
-
-//  if(devparms.triggerstatus != 1)  // Don't plot waveform data when triggerstatus is "wait"
-  if(1)
-  {
-    if(devparms.math_decode_display)
-    {
-      serial_decoder(&devparms);
+    tmcClose();
+    device = nullptr;
+    if(devParms.kCfg != nullptr) {
+        free(devParms.kCfg);
+        devParms.kCfg = nullptr;
     }
 
-    waveForm->drawCurve(&devparms, device);
-  }
-  else  // trigger status is "wait"
-  {
+    statusLabel->setText("Disconnected");
+    printf("Disconnected from device\n");
+}
+
+void UiMainWindow::closeEvent(QCloseEvent* clEvent) {
+    devParms.connected = 0;
+    testTimer->stop();
+    scrnTimer->stop();
+    adjdialTimer->stop();
+    scrnThread->wait(5000);
+    scrnThread->terminate();
+    scrnThread->wait(5000);
+    devParms.screenupdatesOn = 0;
+    scrnThread->setDevice(nullptr);
+    tmcClose();
+    device = nullptr;
+    clEvent->accept();
+}
+
+int UiMainWindow::getDeviceSettings(int delay) {
+    char str[4096]{};
+    statusLabel->setText("Reading instrument settings...");
+    ReadSettingsThread rdSetThrd;
+    rdSetThrd.setDevice(device);
+    rdSetThrd.setDelay(delay);
+    rdSetThrd.setDevparmPtr(&devParms);
+    rdSetThrd.start();
+    QMessageBox msgBox;
+    msgBox.setIcon(QMessageBox::NoIcon);
+    msgBox.setText("Reading instrument settings...");
+    msgBox.addButton("Abort", QMessageBox::RejectRole);
+    connect(&rdSetThrd, &QThread::finished, &msgBox, &QMessageBox::accept);
+    if(msgBox.exec() != QDialog::Accepted) {
+        statusLabel->setText("Reading settings aborted");
+        rdSetThrd.terminate();
+        rdSetThrd.wait(20000);
+        snprintf(str, 4096, "Reading settings aborted");
+        disconnect(&rdSetThrd, 0, 0, 0);
+        return -1;
+    }
+
+    disconnect(&rdSetThrd, 0, 0, 0);
+    if(rdSetThrd.getErrorNum() != 0) {
+        statusLabel->setText("Error while reading settings");
+        rdSetThrd.getErrorStr(str, 4096);
+        msgBox.setIcon(QMessageBox::Critical);
+        msgBox.setText(str);
+        msgBox.exec();
+        strlcpy(str, "Can not read settings from device", 4096);
+        return -1;
+    }
+
+    for(int chn{}; chn < /*devParms.channelCnt*/ 4; chn++) // FIXME
+        if(devParms.chanDisplay[chn] == 1)
+            chButtons.at(chn)->setStyleSheet(std::array{
+                "background: #FFFF33; color: black;",
+                "background: #33FFFF; color: black;",
+                "background: #FF33FF; color: black;",
+                "background: #0080FF; color: black;"}[chn]);
+
+        else
+            chButtons.at(chn)->setStyleSheet(defStylesh);
+
+    if(devParms.triggersweep == 0) {
+        trigModeAutoLed->setValue(true);
+        trigModeNormLed->setValue(false);
+        trigModeSingLed->setValue(false);
+    } else if(devParms.triggersweep == 1) {
+        trigModeAutoLed->setValue(false);
+        trigModeNormLed->setValue(true);
+        trigModeSingLed->setValue(false);
+    } else if(devParms.triggersweep == 2) {
+        trigModeAutoLed->setValue(false);
+        trigModeNormLed->setValue(false);
+        trigModeSingLed->setValue(true);
+    }
+
+    updateLabels();
+    return 0;
+}
+
+int UiMainWindow::parsePreamble(char* str, int sz, struct WaveformPreamble* wfp, int chn) {
+    char* ptr;
+    if(sz < 19)
+        return -1;
+    ptr = strtok(str, ",");
+    if(ptr == nullptr)
+        return -1;
+    wfp->format = atoi(ptr);
+    ptr = strtok(nullptr, ",");
+    if(ptr == nullptr)
+        return -1;
+    wfp->type = atoi(ptr);
+    ptr = strtok(nullptr, ",");
+    if(ptr == nullptr)
+        return -1;
+    wfp->points = atoi(ptr);
+    ptr = strtok(nullptr, ",");
+    if(ptr == nullptr)
+        return -1;
+    wfp->count = atoi(ptr);
+    ptr = strtok(nullptr, ",");
+    if(ptr == nullptr)
+        return -1;
+    wfp->xIncrement[chn] = atof(ptr);
+    ptr = strtok(nullptr, ",");
+    if(ptr == nullptr)
+        return -1;
+    wfp->xOrigin[chn] = atof(ptr);
+    ptr = strtok(nullptr, ",");
+    if(ptr == nullptr)
+        return -1;
+    wfp->xReference[chn] = atof(ptr);
+    ptr = strtok(nullptr, ",");
+    if(ptr == nullptr)
+        return -1;
+    wfp->yIncrement[chn] = atof(ptr);
+    ptr = strtok(nullptr, ",");
+    if(ptr == nullptr)
+        return -1;
+    wfp->yOrigin[chn] = atof(ptr);
+    ptr = strtok(nullptr, ",");
+    if(ptr == nullptr)
+        return -1;
+    wfp->yReference[chn] = atoi(ptr);
+    ptr = strtok(nullptr, ",");
+    if(ptr != nullptr)
+        return -1;
+    return 0;
+}
+
+int UiMainWindow::getMetricFactor(double value) {
+    int suffix = 0;
+    if(value < 0)
+        value *= -1;
+    if(value >= 1e12 && value < 1e15)
+        suffix = 12;
+    else if(value >= 1e9 && value < 1e12)
+        suffix = 9;
+    else if(value >= 1e6 && value < 1e9)
+        suffix = 6;
+    else if(value >= 1e3 && value < 1e6)
+        suffix = 3;
+    else if(value >= 1e-3 && value < 1)
+        suffix = -3;
+    else if(value >= 1e-6 && value < 1e-3)
+        suffix = -6;
+    else if(value >= 1e-9 && value < 1e-6)
+        suffix = -9;
+    else if(value >= 1e-12 && value < 1e-9)
+        suffix = -12;
+    return suffix;
+}
+
+double UiMainWindow::getStepSizeDivideBy1000(double val) {
+    int exp = 0;
+    if(val < 1e-9)
+        return 1e-9;
+    while(val < 1) {
+        val *= 10;
+        exp--;
+    }
+
+    while(val >= 10) {
+        val /= 10;
+        exp++;
+    }
+
+    val = exp10(exp - 2);
+    if((val < 1e-13) && (val > -1e-13))
+        return 0;
+    return val;
+}
+
+void UiMainWindow::getDeviceModel(const char* str) {
+    devParms.channelCnt = 0;
+    devParms.bandwidth = 0;
+    devParms.horDivisions = 14;
+    devParms.vertDivisions = 8;
+    if(!strcmp(str, "DS6104")) {
+        devParms.channelCnt = 4;
+        devParms.bandwidth = 1000;
+        devParms.modelSerie = 6;
+    }
+
+    if(!strcmp(str, "DS6064")) {
+        devParms.channelCnt = 4;
+        devParms.bandwidth = 600;
+        devParms.modelSerie = 6;
+    }
+
+    if(!strcmp(str, "DS6102")) {
+        devParms.channelCnt = 2;
+        devParms.bandwidth = 1000;
+        devParms.modelSerie = 6;
+    }
+
+    if(!strcmp(str, "DS6062")) {
+        devParms.channelCnt = 2;
+        devParms.bandwidth = 600;
+        devParms.modelSerie = 6;
+    }
+
+    if(!strcmp(str, "DS4012")) {
+        devParms.channelCnt = 2;
+        devParms.bandwidth = 100;
+        devParms.modelSerie = 4;
+    }
+
+    if(!strcmp(str, "DS4014")) {
+        devParms.channelCnt = 4;
+        devParms.bandwidth = 100;
+        devParms.modelSerie = 4;
+    }
+
+    if(!strcmp(str, "DS4022")) {
+        devParms.channelCnt = 2;
+        devParms.bandwidth = 200;
+        devParms.modelSerie = 4;
+    }
+
+    if(!strcmp(str, "DS4024")) {
+        devParms.channelCnt = 4;
+        devParms.bandwidth = 200;
+        devParms.modelSerie = 4;
+    }
+
+    if(!strcmp(str, "DS4032")) {
+        devParms.channelCnt = 2;
+        devParms.bandwidth = 350;
+        devParms.modelSerie = 4;
+    }
+
+    if(!strcmp(str, "DS4034")) {
+        devParms.channelCnt = 4;
+        devParms.bandwidth = 350;
+        devParms.modelSerie = 4;
+    }
+
+    if(!strcmp(str, "DS4052")) {
+        devParms.channelCnt = 2;
+        devParms.bandwidth = 500;
+        devParms.modelSerie = 4;
+    }
+
+    if(!strcmp(str, "DS4054")) {
+        devParms.channelCnt = 4;
+        devParms.bandwidth = 500;
+        devParms.modelSerie = 4;
+    }
+
+    if(!strcmp(str, "MSO4012")) {
+        devParms.channelCnt = 2;
+        devParms.bandwidth = 100;
+        devParms.modelSerie = 4;
+    }
+
+    if(!strcmp(str, "MSO4024")) {
+        devParms.channelCnt = 4;
+        devParms.bandwidth = 200;
+        devParms.modelSerie = 4;
+    }
+
+    if(!strcmp(str, "DS2072A")) {
+        devParms.channelCnt = 2;
+        devParms.bandwidth = 70;
+        devParms.modelSerie = 2;
+    }
+
+    if(!strcmp(str, "DS2072A-S")) {
+        devParms.channelCnt = 2;
+        devParms.bandwidth = 70;
+        devParms.modelSerie = 2;
+    }
+
+    if(!strcmp(str, "DS2102")) {
+        devParms.channelCnt = 2;
+        devParms.bandwidth = 100;
+        devParms.modelSerie = 2;
+    }
+
+    if(!strcmp(str, "DS2102A")) {
+        devParms.channelCnt = 2;
+        devParms.bandwidth = 100;
+        devParms.modelSerie = 2;
+    }
+
+    if(!strcmp(str, "DS2102A-S")) {
+        devParms.channelCnt = 2;
+        devParms.bandwidth = 100;
+        devParms.modelSerie = 2;
+    }
+
+    if(!strcmp(str, "DS2202")) {
+        devParms.channelCnt = 2;
+        devParms.bandwidth = 200;
+        devParms.modelSerie = 2;
+    }
+
+    if(!strcmp(str, "DS2202A")) {
+        devParms.channelCnt = 2;
+        devParms.bandwidth = 200;
+        devParms.modelSerie = 2;
+    }
+
+    if(!strcmp(str, "DS2202A-S")) {
+        devParms.channelCnt = 2;
+        devParms.bandwidth = 200;
+        devParms.modelSerie = 2;
+    }
+
+    if(!strcmp(str, "DS2302")) {
+        devParms.channelCnt = 2;
+        devParms.bandwidth = 300;
+        devParms.modelSerie = 2;
+    }
+
+    if(!strcmp(str, "DS2302A")) {
+        devParms.channelCnt = 2;
+        devParms.bandwidth = 300;
+        devParms.modelSerie = 2;
+    }
+
+    if(!strcmp(str, "DS2302A-S")) {
+        devParms.channelCnt = 2;
+        devParms.bandwidth = 300;
+        devParms.modelSerie = 2;
+    }
+
+    if(!strcmp(str, "DS1054Z")) {
+        devParms.channelCnt = 4;
+        devParms.bandwidth = 50;
+        devParms.modelSerie = 1;
+    }
+
+    if(!strcmp(str, "DS1074Z")) {
+        devParms.channelCnt = 4;
+        devParms.bandwidth = 70;
+        devParms.modelSerie = 1;
+    }
+
+    if(!strcmp(str, "DS1074Z-S")) {
+        devParms.channelCnt = 4;
+        devParms.bandwidth = 70;
+        devParms.modelSerie = 1;
+    }
+
+    if(!strcmp(str, "DS1074Z Plus")) {
+        devParms.channelCnt = 4;
+        devParms.bandwidth = 70;
+        devParms.modelSerie = 1;
+    }
+
+    if(!strcmp(str, "DS1074Z-S Plus")) {
+        devParms.channelCnt = 4;
+        devParms.bandwidth = 70;
+        devParms.modelSerie = 1;
+    }
+
+    if(!strcmp(str, "DS1104Z")) {
+        devParms.channelCnt = 4;
+        devParms.bandwidth = 100;
+        devParms.modelSerie = 1;
+    }
+
+    if(!strcmp(str, "DS1104Z-S")) {
+        devParms.channelCnt = 4;
+        devParms.bandwidth = 100;
+        devParms.modelSerie = 1;
+    }
+
+    if(!strcmp(str, "DS1104Z Plus")) {
+        devParms.channelCnt = 4 + 16;
+        devParms.bandwidth = 100;
+        devParms.modelSerie = 1;
+    }
+
+    if(!strcmp(str, "DS1104Z-S Plus")) {
+        devParms.channelCnt = 4;
+        devParms.bandwidth = 100;
+        devParms.modelSerie = 1;
+    }
+
+    if(!strcmp(str, "MSO1074Z")) {
+        devParms.channelCnt = 4;
+        devParms.bandwidth = 70;
+        devParms.modelSerie = 1;
+    }
+
+    if(!strcmp(str, "MSO1104Z")) {
+        devParms.channelCnt = 4;
+        devParms.bandwidth = 100;
+        devParms.modelSerie = 1;
+    }
+
+    if(!strcmp(str, "MSO1074Z-S")) {
+        devParms.channelCnt = 4;
+        devParms.bandwidth = 70;
+        devParms.modelSerie = 1;
+    }
+
+    if(!strcmp(str, "MSO1104Z-S")) {
+        devParms.channelCnt = 4;
+        devParms.bandwidth = 100;
+        devParms.modelSerie = 1;
+    }
+
+    if(!strcmp(str, "DS1202Z-E")) {
+        devParms.channelCnt = 2;
+        devParms.bandwidth = 200;
+        devParms.modelSerie = 1;
+    }
+
+    if(!strcmp(str, "DS1102Z-E")) {
+        devParms.channelCnt = 2;
+        devParms.bandwidth = 100;
+        devParms.modelSerie = 1;
+    }
+
+    if(devParms.modelSerie == 1) {
+        if(devParms.useExtraVertDivisions)
+            devParms.vertDivisions = 10;
+        devParms.horDivisions = 12;
+    }
+
+    if(devParms.channelCnt && devParms.bandwidth && devParms.modelSerie)
+        strlcpy(devParms.modelName, str, 128);
+}
+
+void UiMainWindow::formerPage() {
+    char str[512];
+    if(device == nullptr)
+        return;
+    if(!devParms.connected)
+        return;
+    if(devParms.activechannel < 0)
+        return;
+    if(devParms.timebasedelayenable) {
+        const auto timebasedelayoffset = (((devParms.horDivisions / 2) * devParms.timebasescale)
+            - devParms.timebaseoffset
+            - ((devParms.horDivisions / 2) * devParms.timebasedelayscale));
+        if(devParms.timebasedelayoffset <= -timebasedelayoffset)
+            return;
+        devParms.timebasedelayoffset -= devParms.timebasedelayscale * devParms.horDivisions;
+        if(devParms.timebasedelayoffset <= -timebasedelayoffset)
+            devParms.timebasedelayoffset = -timebasedelayoffset;
+        strlcpy(str, "Delayed timebase position: ", 512);
+        convertToMetricSuffix(str + strlen(str),
+            devParms.timebasedelayoffset,
+            2,
+            512 - strlen(str));
+        strlcat(str, "s", 512);
+        statusLabel->setText(str);
+        horPosDialTimer->start(TMC_DIAL_TIMER_DELAY);
+    } else {
+        devParms.timebaseoffset -= devParms.timebasescale * devParms.horDivisions;
+        if(devParms.acquirememdepth > 10) {
+            if(devParms.timebaseoffset
+                <= -(((double)devParms.acquirememdepth / devParms.samplerate) / 2))
+                devParms.timebaseoffset = -(
+                    ((double)devParms.acquirememdepth / devParms.samplerate) / 2);
+        } else {
+            if(devParms.timebaseoffset <= -((devParms.horDivisions / 2) * devParms.timebasescale))
+                devParms.timebaseoffset = -((devParms.horDivisions / 2) * devParms.timebasescale);
+        }
+
+        strlcpy(str, "Horizontal position: ", 512);
+        convertToMetricSuffix(str + strlen(str), devParms.timebaseoffset, 2, 512 - strlen(str));
+        strlcat(str, "s", 512);
+        statusLabel->setText(str);
+        horPosDialTimer->start(TMC_DIAL_TIMER_DELAY);
+    }
+
     waveForm->update();
-  }
-
-  pthread_mutex_unlock(&devparms.mutexx);
 }
 
+void UiMainWindow::nextPage() {
+    char str[512];
+    if(device == nullptr)
+        return;
+    if(!devParms.connected)
+        return;
+    if(devParms.activechannel < 0)
+        return;
+    if(devParms.timebasedelayenable) {
+        const auto timebasedelayoffset = (((devParms.horDivisions / 2) * devParms.timebasescale)
+            + devParms.timebaseoffset
+            - ((devParms.horDivisions / 2) * devParms.timebasedelayscale));
+        if(devParms.timebasedelayoffset >= timebasedelayoffset)
+            return;
+        devParms.timebasedelayoffset += devParms.timebasedelayscale * devParms.horDivisions;
+        if(devParms.timebasedelayoffset >= timebasedelayoffset)
+            devParms.timebasedelayoffset = timebasedelayoffset;
+        strlcpy(str, "Delayed timebase position: ", 512);
+        convertToMetricSuffix(str + strlen(str),
+            devParms.timebasedelayoffset,
+            2,
+            512 - strlen(str));
+        strlcat(str, "s", 512);
+        statusLabel->setText(str);
+        horPosDialTimer->start(TMC_DIAL_TIMER_DELAY);
+    } else {
+        devParms.timebaseoffset += devParms.timebasescale * devParms.horDivisions;
+        if(devParms.acquirememdepth > 10) {
+            if(devParms.timebaseoffset >= (((double)devParms.acquirememdepth / devParms.samplerate) / 2))
+                devParms.timebaseoffset = (((double)devParms.acquirememdepth / devParms.samplerate) / 2);
+        } else {
+            if(devParms.timebaseoffset >= (devParms.horDivisions / 2) * devParms.timebasescale)
+                devParms.timebaseoffset = (devParms.horDivisions / 2) * devParms.timebasescale;
+        }
 
-void UI_Mainwindow::set_cue_cmd(const char *str)
-{
-  strlcpy(devparms.cmd_cue[devparms.cmd_cue_idx_in], str, 128);
+        strlcpy(str, "Horizontal position: ", 512);
+        convertToMetricSuffix(str + strlen(str), devParms.timebaseoffset, 2, 512 - strlen(str));
+        strlcat(str, "s", 512);
+        statusLabel->setText(str);
+        horPosDialTimer->start(TMC_DIAL_TIMER_DELAY);
+    }
 
-  devparms.cmd_cue_resp[devparms.cmd_cue_idx_in] = NULL;
-
-  devparms.cmd_cue_idx_in++;
-
-  devparms.cmd_cue_idx_in %= TMC_CMD_CUE_SZ;
-
-  scrn_timer_handler();
+    waveForm->update();
 }
 
+void UiMainWindow::shiftPageLeft() {
+    char str[512];
+    if(device == nullptr)
+        return;
+    if(!devParms.connected)
+        return;
+    if(devParms.mathFft && devParms.mathFftSplit) {
+        devParms.mathFftHcenter -= devParms.mathFftHscale;
+        if(devParms.mathFftHcenter <= 0.0)
+            devParms.mathFftHcenter = 0.0;
+        if(devParms.modelSerie != 1)
+            snprintf(str, 512, ":CALC:FFT:HCEN %e", devParms.mathFftHcenter);
+        else
+            snprintf(str, 512, ":MATH:FFT:HCEN %e", devParms.mathFftHcenter);
+        setCueCmd(str);
+        strlcpy(str, "FFT center: ", 512);
+        convertToMetricSuffix(str + strlen(str), devParms.mathFftHcenter, 0, 512 - strlen(str));
+        strlcat(str, "Hz", 512);
+        statusLabel->setText(str);
+        waveForm->update();
+        return;
+    }
 
-void UI_Mainwindow::set_cue_cmd(const char *str, char *ptr)
-{
-  strlcpy(devparms.cmd_cue[devparms.cmd_cue_idx_in], str, 128);
+    if(devParms.activechannel < 0)
+        return;
+    if(devParms.timebasedelayenable) {
+        const auto timebasedelayoffset = (((devParms.horDivisions / 2) * devParms.timebasescale)
+            - devParms.timebaseoffset
+            - ((devParms.horDivisions / 2) * devParms.timebasedelayscale));
+        if(devParms.timebasedelayoffset <= -timebasedelayoffset)
+            return;
+        devParms.timebasedelayoffset -= devParms.timebasedelayscale;
+        if(devParms.timebasedelayoffset <= -timebasedelayoffset)
+            devParms.timebasedelayoffset = -timebasedelayoffset;
+        strlcpy(str, "Delayed timebase position: ", 512);
+        convertToMetricSuffix(str + strlen(str),
+            devParms.timebasedelayoffset,
+            2,
+            512 - strlen(str));
+        strlcat(str, "s", 512);
+        statusLabel->setText(str);
+        horPosDialTimer->start(TMC_DIAL_TIMER_DELAY);
+    } else {
+        devParms.timebaseoffset -= devParms.timebasescale;
+        if(devParms.acquirememdepth > 10) {
+            if(devParms.timebaseoffset
+                <= -(((double)devParms.acquirememdepth / devParms.samplerate) / 2))
+                devParms.timebaseoffset = -(
+                    ((double)devParms.acquirememdepth / devParms.samplerate) / 2);
+        } else {
+            if(devParms.timebaseoffset <= -((devParms.horDivisions / 2) * devParms.timebasescale))
+                devParms.timebaseoffset = -((devParms.horDivisions / 2) * devParms.timebasescale);
+        }
 
-  ptr[0] = 0;
+        strlcpy(str, "Horizontal position: ", 512);
+        convertToMetricSuffix(str + strlen(str), devParms.timebaseoffset, 2, 512 - strlen(str));
+        strlcat(str, "s", 512);
+        statusLabel->setText(str);
+        horPosDialTimer->start(TMC_DIAL_TIMER_DELAY);
+    }
 
-  devparms.cmd_cue_resp[devparms.cmd_cue_idx_in] = ptr;
-
-  devparms.cmd_cue_idx_in++;
-
-  devparms.cmd_cue_idx_in %= TMC_CMD_CUE_SZ;
-
-  scrn_timer_handler();
+    waveForm->update();
 }
 
+void UiMainWindow::shiftPageRight() {
+    char str[512];
+    if(device == nullptr)
+        return;
+    if(!devParms.connected)
+        return;
+    if(devParms.mathFft && devParms.mathFftSplit) {
+        devParms.mathFftHcenter += devParms.mathFftHscale;
+        if(devParms.mathFftHcenter >= (devParms.currentScreenSf * 0.4))
+            devParms.mathFftHcenter = devParms.currentScreenSf * 0.4;
+        if(devParms.modelSerie != 1)
+            snprintf(str, 512, ":CALC:FFT:HCEN %e", devParms.mathFftHcenter);
+        else
+            snprintf(str, 512, ":MATH:FFT:HCEN %e", devParms.mathFftHcenter);
+        setCueCmd(str);
+        strlcpy(str, "FFT center: ", 512);
+        convertToMetricSuffix(str + strlen(str), devParms.mathFftHcenter, 0, 512 - strlen(str));
+        strlcat(str, "Hz", 512);
+        statusLabel->setText(str);
+        waveForm->update();
+        return;
+    }
 
+    if(devParms.activechannel < 0)
+        return;
+    if(devParms.timebasedelayenable) {
+        const auto timebasedelayoffset = (((devParms.horDivisions / 2) * devParms.timebasescale)
+            + devParms.timebaseoffset
+            - ((devParms.horDivisions / 2) * devParms.timebasedelayscale));
+        if(devParms.timebasedelayoffset >= timebasedelayoffset)
+            return;
+        devParms.timebasedelayoffset += devParms.timebasedelayscale;
+        if(devParms.timebasedelayoffset >= timebasedelayoffset)
+            devParms.timebasedelayoffset = timebasedelayoffset;
+        strlcpy(str, "Delayed timebase position: ", 512);
+        convertToMetricSuffix(str + strlen(str),
+            devParms.timebasedelayoffset,
+            2,
+            512 - strlen(str));
+        strlcat(str, "s", 512);
+        statusLabel->setText(str);
+        horPosDialTimer->start(TMC_DIAL_TIMER_DELAY);
+    } else {
+        devParms.timebaseoffset += devParms.timebasescale;
+        if(devParms.acquirememdepth > 10) {
+            if(devParms.timebaseoffset >= (((double)devParms.acquirememdepth / devParms.samplerate) / 2))
+                devParms.timebaseoffset = (((double)devParms.acquirememdepth / devParms.samplerate) / 2);
+        } else {
+            if(devParms.timebaseoffset >= (devParms.horDivisions / 2) * devParms.timebasescale)
+                devParms.timebaseoffset = (devParms.horDivisions / 2) * devParms.timebasescale;
+        }
 
+        strlcpy(str, "Horizontal position: ", 512);
+        convertToMetricSuffix(str + strlen(str), devParms.timebaseoffset, 2, 512 - strlen(str));
+        strlcat(str, "s", 512);
+        statusLabel->setText(str);
+        horPosDialTimer->start(TMC_DIAL_TIMER_DELAY);
+    }
 
+    waveForm->update();
+}
 
+void UiMainWindow::centerTrigger() {
+    char str[512];
+    if(device == nullptr)
+        return;
+    if(!devParms.connected)
+        return;
+    if(devParms.mathFft && devParms.mathFftSplit) {
+        devParms.mathFftHcenter = 0;
+        if(devParms.modelSerie != 1)
+            snprintf(str, 512, ":CALC:FFT:HCEN %e", devParms.mathFftHcenter);
+        else
+            snprintf(str, 512, ":MATH:FFT:HCEN %e", devParms.mathFftHcenter);
+        setCueCmd(str);
+        strlcpy(str, "FFT center: ", 512);
+        convertToMetricSuffix(str + strlen(str), devParms.mathFftHcenter, 0, 512 - strlen(str));
+        strlcat(str, "Hz", 512);
+        statusLabel->setText(str);
+        waveForm->update();
+        return;
+    }
 
+    if(devParms.activechannel < 0)
+        return;
+    if(devParms.timebasedelayenable) {
+        devParms.timebasedelayoffset = 0;
+        strlcpy(str, "Delayed timebase position: ", 512);
+        convertToMetricSuffix(str + strlen(str),
+            devParms.timebasedelayoffset,
+            2,
+            512 - strlen(str));
+        strlcat(str, "s", 512);
+        statusLabel->setText(str);
+        horPosDialTimer->start(TMC_DIAL_TIMER_DELAY);
+    } else {
+        devParms.timebaseoffset = 0;
+        strlcpy(str, "Horizontal position: ", 512);
+        convertToMetricSuffix(str + strlen(str), devParms.timebaseoffset, 2, 512 - strlen(str));
+        strlcat(str, "s", 512);
+        statusLabel->setText(str);
+        horPosDialTimer->start(TMC_DIAL_TIMER_DELAY);
+    }
 
+    waveForm->update();
+}
 
+void UiMainWindow::zoomIn() {
+    char str[512];
+    if(device == nullptr)
+        return;
+    if(!devParms.connected)
+        return;
+    if(devParms.activechannel < 0)
+        return;
+    if(devParms.mathFft && devParms.mathFftSplit) {
+        if(!dblcmp(devParms.mathFftHscale, devParms.currentScreenSf / 200.0))
+            return;
+        if(!dblcmp(devParms.mathFftHscale, devParms.currentScreenSf / 20.0))
+            devParms.mathFftHscale = devParms.currentScreenSf / 40.0;
+        else if(!dblcmp(devParms.mathFftHscale, devParms.currentScreenSf / 40.0))
+            devParms.mathFftHscale = devParms.currentScreenSf / 100.0;
+        else
+            devParms.mathFftHscale = devParms.currentScreenSf / 200.0;
+        if(devParms.modelSerie != 1)
+            snprintf(str, 512, ":CALC:FFT:HSP %e", devParms.mathFftHscale);
+        else
+            snprintf(str, 512, ":MATH:FFT:HSC %e", devParms.mathFftHscale);
+        setCueCmd(str);
+        strlcpy(str, "FFT scale: ", 512);
+        convertToMetricSuffix(str + strlen(str), devParms.mathFftHscale, 0, 512 - strlen(str));
+        strlcat(str, "Hz/Div", 512);
+        statusLabel->setText(str);
+        waveForm->update();
+        return;
+    }
 
+    if(devParms.activechannel < 0)
+        return;
+    if(devParms.timebasedelayenable) {
+        if(devParms.modelSerie == 1) {
+            if(devParms.timebasescale <= 5.001e-9) {
+                devParms.timebasescale = 5e-9;
+                return;
+            }
+        } else if(devParms.bandwidth == 1000) {
+            if(devParms.timebasedelayscale <= 5.001e-10) {
+                devParms.timebasedelayscale = 5e-10;
+                return;
+            }
+        } else if(devParms.timebasedelayscale <= 1.001e-9) {
+            devParms.timebasedelayscale = 1e-9;
+            return;
+        }
 
+        devParms.timebasedelayscale = roundDownStep125(devParms.timebasedelayscale, nullptr);
+        devParms.currentScreenSf = 100.0 / devParms.timebasedelayscale;
+        strlcpy(str, "Delayed timebase: ", 512);
+        convertToMetricSuffix(str + strlen(str),
+            devParms.timebasedelayscale,
+            2,
+            512 - strlen(str));
+        strlcat(str, "s", 512);
+        statusLabel->setText(str);
+        snprintf(str, 512, ":TIM:DEL:SCAL %e", devParms.timebasedelayscale);
+        setCueCmd(str);
+    } else {
+        if(devParms.modelSerie == 1) {
+            if(devParms.timebasescale <= 5.001e-9) {
+                devParms.timebasescale = 5e-9;
+                return;
+            }
+        } else if(devParms.bandwidth == 1000) {
+            if(devParms.timebasescale <= 5.001e-10) {
+                devParms.timebasescale = 5e-10;
+                return;
+            }
+        } else if(devParms.timebasescale <= 1.001e-9) {
+            devParms.timebasescale = 1e-9;
+            return;
+        }
 
+        devParms.timebasescale = roundDownStep125(devParms.timebasescale, nullptr);
+        devParms.currentScreenSf = 100.0 / devParms.timebasescale;
+        strlcpy(str, "Timebase: ", 512);
+        convertToMetricSuffix(str + strlen(str), devParms.timebasescale, 2, 512 - strlen(str));
+        strlcat(str, "s", 512);
+        statusLabel->setText(str);
+        snprintf(str, 512, ":TIM:SCAL %e", devParms.timebasescale);
+        setCueCmd(str);
+    }
 
+    waveForm->update();
+}
 
+void UiMainWindow::zoomOut() {
+    char str[512];
+    if(device == nullptr)
+        return;
+    if(!devParms.connected)
+        return;
+    if(devParms.activechannel < 0)
+        return;
+    if(devParms.mathFft && devParms.mathFftSplit) {
+        if(!dblcmp(devParms.mathFftHscale, devParms.currentScreenSf / 20.0))
+            return;
+        if(!dblcmp(devParms.mathFftHscale, devParms.currentScreenSf / 200.0))
+            devParms.mathFftHscale = devParms.currentScreenSf / 100.0;
+        else if(!dblcmp(devParms.mathFftHscale, devParms.currentScreenSf / 100.0))
+            devParms.mathFftHscale = devParms.currentScreenSf / 40.0;
+        else
+            devParms.mathFftHscale = devParms.currentScreenSf / 20.0;
+        if(devParms.modelSerie != 1)
+            snprintf(str, 512, ":CALC:FFT:HSP %e", devParms.mathFftHscale);
+        else
+            snprintf(str, 512, ":MATH:FFT:HSC %e", devParms.mathFftHscale);
+        setCueCmd(str);
+        strlcpy(str, "FFT scale: ", 512);
+        convertToMetricSuffix(str + strlen(str), devParms.mathFftHscale, 0, 512 - strlen(str));
+        strlcat(str, "Hz/Div", 512);
+        statusLabel->setText(str);
+        waveForm->update();
+        return;
+    }
 
+    if(devParms.timebasedelayenable) {
+        if(devParms.timebasedelayscale >= devParms.timebasescale / 2) {
+            devParms.timebasedelayscale = devParms.timebasescale / 2;
+            return;
+        }
+
+        if(devParms.timebasedelayscale >= 0.1) {
+            devParms.timebasedelayscale = 0.1;
+            return;
+        }
+
+        devParms.timebasedelayscale = roundUpStep125(devParms.timebasedelayscale, nullptr);
+        devParms.currentScreenSf = 100.0 / devParms.timebasedelayscale;
+        strlcpy(str, "Delayed timebase: ", 512);
+        convertToMetricSuffix(str + strlen(str),
+            devParms.timebasedelayscale,
+            2,
+            512 - strlen(str));
+        strlcat(str, "s", 512);
+        statusLabel->setText(str);
+        snprintf(str, 512, ":TIM:DEL:SCAL %e", devParms.timebasedelayscale);
+        setCueCmd(str);
+        if(devParms.timebasedelayscale > 0.1000001)
+            devParms.funcWrecEnable = 0;
+    } else {
+        if(devParms.timebasescale >= 10) {
+            devParms.timebasescale = 10;
+            return;
+        }
+
+        devParms.timebasescale = roundUpStep125(devParms.timebasescale, nullptr);
+        devParms.currentScreenSf = 100.0 / devParms.timebasescale;
+        strlcpy(str, "Timebase: ", 512);
+        convertToMetricSuffix(str + strlen(str), devParms.timebasescale, 2, 512 - strlen(str));
+        strlcat(str, "s", 512);
+        statusLabel->setText(str);
+        snprintf(str, 512, ":TIM:SCAL %e", devParms.timebasescale);
+        setCueCmd(str);
+        if(devParms.timebasescale > 0.1000001)
+            devParms.funcWrecEnable = 0;
+    }
+
+    waveForm->update();
+}
+
+void UiMainWindow::chanScalePlus() {
+    int chn;
+    double val, ltmp;
+    char str[512];
+    if(device == nullptr)
+        return;
+    if(!devParms.connected)
+        return;
+    if(devParms.activechannel < 0)
+        return;
+    if(devParms.mathFft && devParms.mathFftSplit) {
+        devParms.fftVScale = roundUpStep125(devParms.fftVScale, nullptr);
+        if(devParms.mathFftUnit == 0) {
+            if(devParms.fftVScale > 50.0)
+                devParms.fftVScale = 50.0;
+        } else {
+            if(devParms.fftVScale > 20.0)
+                devParms.fftVScale = 20.0;
+        }
+
+        if(devParms.fftVOffset > (devParms.fftVScale * 4.0))
+            devParms.fftVOffset = (devParms.fftVScale * 4.0);
+        if(devParms.fftVOffset < (devParms.fftVScale * -4.0))
+            devParms.fftVOffset = (devParms.fftVScale * -4.0);
+        if(devParms.modelSerie != 1) {
+            if(devParms.mathFftUnit == 1) {
+                snprintf(str, 512, ":CALC:FFT:VSC %e", devParms.fftVScale);
+                setCueCmd(str);
+            } else {
+                snprintf(str,
+                    512,
+                    ":CALC:FFT:VSC %e",
+                    devParms.fftVScale / devParms.chanscale[devParms.mathFftSrc]);
+                setCueCmd(str);
+            }
+        } else {
+            snprintf(str, 512, ":MATH:SCAL %e", devParms.fftVScale);
+            setCueCmd(str);
+        }
+
+        if(devParms.mathFftUnit == 0) {
+            strlcpy(str, "FFT scale: ", 512);
+            convertToMetricSuffix(str + strlen(str), devParms.fftVScale, 1, 512 - strlen(str));
+            strlcat(str, "V/Div", 512);
+        } else {
+            snprintf(str, 512, "FFT scale: %.1fdB/Div", devParms.fftVScale);
+        }
+
+        statusLabel->setText(str);
+        waveForm->update();
+        return;
+    }
+
+    chn = devParms.activechannel;
+    if(devParms.chanscale[chn] >= 20) {
+        devParms.chanscale[chn] = 20;
+        return;
+    }
+
+    ltmp = devParms.chanscale[chn];
+    val = roundUpStep125(devParms.chanscale[chn], nullptr);
+    if(devParms.chanvernier[chn]) {
+        val /= 100;
+        devParms.chanscale[chn] += val;
+    } else {
+        devParms.chanscale[chn] = val;
+    }
+
+    ltmp /= val;
+    devParms.chanoffset[chn] /= ltmp;
+    snprintf(str, 512, "Channel %i scale: ", chn + 1);
+    convertToMetricSuffix(str + strlen(str), devParms.chanscale[chn], 2, 512 - strlen(str));
+    strlcat(str, "V", 512);
+    statusLabel->setText(str);
+    snprintf(str, 512, ":CHAN%i:SCAL %e", chn + 1, devParms.chanscale[chn]);
+    setCueCmd(str);
+    waveForm->update();
+}
+
+void UiMainWindow::chanScalePlusAll() {
+    int chn;
+    double val, ltmp;
+    char str[512];
+    if(device == nullptr)
+        return;
+    if(!devParms.connected)
+        return;
+    if(devParms.activechannel < 0)
+        return;
+    if(devParms.mathFft && devParms.mathFftSplit)
+        return;
+    for(chn = 0; chn < devParms.channelCnt; chn++) {
+        if(!devParms.chanDisplay[chn])
+            continue;
+        if(devParms.chanscale[chn] >= 20) {
+            devParms.chanscale[chn] = 20;
+            return;
+        }
+
+        ltmp = devParms.chanscale[chn];
+        val = roundUpStep125(devParms.chanscale[chn], nullptr);
+        if(devParms.chanvernier[chn]) {
+            val /= 100;
+            devParms.chanscale[chn] += val;
+        } else {
+            devParms.chanscale[chn] = val;
+        }
+
+        ltmp /= val;
+        devParms.chanoffset[chn] /= ltmp;
+        snprintf(str, 512, "Channel %i scale: ", chn + 1);
+        convertToMetricSuffix(str + strlen(str), devParms.chanscale[chn], 2, 512 - strlen(str));
+        strlcat(str, "V", 512);
+        statusLabel->setText(str);
+        snprintf(str, 512, ":CHAN%i:SCAL %e", chn + 1, devParms.chanscale[chn]);
+        setCueCmd(str);
+    }
+
+    waveForm->update();
+}
+
+void UiMainWindow::chanScaleMinus() {
+    int chn;
+    double val, ltmp;
+    char str[512];
+    if(device == nullptr)
+        return;
+    if(!devParms.connected)
+        return;
+    if(devParms.activechannel < 0)
+        return;
+    if(devParms.mathFft && devParms.mathFftSplit) {
+        devParms.fftVScale = roundDownStep125(devParms.fftVScale, nullptr);
+        if(devParms.mathFftUnit == 0) {
+            if(devParms.fftVScale < 1.0)
+                devParms.fftVScale = 1.0;
+        } else {
+            if(devParms.fftVScale < 1.0)
+                devParms.fftVScale = 1.0;
+        }
+
+        if(devParms.fftVOffset > (devParms.fftVScale * 4.0))
+            devParms.fftVOffset = (devParms.fftVScale * 4.0);
+        if(devParms.fftVOffset < (devParms.fftVScale * -4.0))
+            devParms.fftVOffset = (devParms.fftVScale * -4.0);
+        if(devParms.modelSerie != 1) {
+            if(devParms.mathFftUnit == 1) {
+                snprintf(str, 512, ":CALC:FFT:VSC %e", devParms.fftVScale);
+                setCueCmd(str);
+            } else {
+                snprintf(str,
+                    512,
+                    ":CALC:FFT:VSC %e",
+                    devParms.fftVScale / devParms.chanscale[devParms.mathFftSrc]);
+                setCueCmd(str);
+            }
+        } else {
+            snprintf(str, 512, ":MATH:SCAL %e", devParms.fftVScale);
+            setCueCmd(str);
+        }
+
+        if(devParms.mathFftUnit == 0) {
+            strlcpy(str, "FFT scale: ", 512);
+            convertToMetricSuffix(str + strlen(str), devParms.fftVScale, 1, 512 - strlen(str));
+            strlcat(str, "V/Div", 512);
+        } else {
+            snprintf(str, 512, "FFT scale: %.1fdB/Div", devParms.fftVScale);
+        }
+
+        statusLabel->setText(str);
+        waveForm->update();
+        return;
+    }
+
+    chn = devParms.activechannel;
+    if(devParms.chanscale[chn] <= 1e-2) {
+        devParms.chanscale[chn] = 1e-2;
+        return;
+    }
+
+    ltmp = devParms.chanscale[chn];
+    if(devParms.chanvernier[chn])
+        val = roundUpStep125(devParms.chanscale[chn], nullptr);
+    else
+        val = roundDownStep125(devParms.chanscale[chn], nullptr);
+    if(devParms.chanvernier[chn]) {
+        val /= 100;
+        devParms.chanscale[chn] -= val;
+    } else {
+        devParms.chanscale[chn] = val;
+    }
+
+    ltmp /= val;
+    devParms.chanoffset[chn] /= ltmp;
+    snprintf(str, 512, "Channel %i scale: ", chn + 1);
+    convertToMetricSuffix(str + strlen(str), devParms.chanscale[chn], 2, 512 - strlen(str));
+    strlcat(str, "V", 512);
+    statusLabel->setText(str);
+    snprintf(str, 512, ":CHAN%i:SCAL %e", chn + 1, devParms.chanscale[chn]);
+    setCueCmd(str);
+    waveForm->update();
+}
+
+void UiMainWindow::chanScaleMinusAll() {
+    int chn;
+    double val, ltmp;
+    char str[512];
+    if(device == nullptr)
+        return;
+    if(!devParms.connected)
+        return;
+    if(devParms.activechannel < 0)
+        return;
+    if(devParms.mathFft && devParms.mathFftSplit)
+        return;
+    for(chn = 0; chn < devParms.channelCnt; chn++) {
+        if(!devParms.chanDisplay[chn])
+            continue;
+        if(devParms.chanscale[chn] <= 1e-2) {
+            devParms.chanscale[chn] = 1e-2;
+            return;
+        }
+
+        ltmp = devParms.chanscale[chn];
+        if(devParms.chanvernier[chn])
+            val = roundUpStep125(devParms.chanscale[chn], nullptr);
+        else
+            val = roundDownStep125(devParms.chanscale[chn], nullptr);
+        if(devParms.chanvernier[chn]) {
+            val /= 100;
+            devParms.chanscale[chn] -= val;
+        } else {
+            devParms.chanscale[chn] = val;
+        }
+
+        ltmp /= val;
+        devParms.chanoffset[chn] /= ltmp;
+        snprintf(str, 512, "Channel %i scale: ", chn + 1);
+        convertToMetricSuffix(str + strlen(str), devParms.chanscale[chn], 2, 512 - strlen(str));
+        strlcat(str, "V", 512);
+        statusLabel->setText(str);
+        snprintf(str, 512, ":CHAN%i:SCAL %e", chn + 1, devParms.chanscale[chn]);
+        setCueCmd(str);
+    }
+
+    waveForm->update();
+}
+
+void UiMainWindow::shiftTraceUp() {
+    int chn;
+    char str[512];
+    if(device == nullptr)
+        return;
+    if(!devParms.connected)
+        return;
+    if(devParms.activechannel < 0)
+        return;
+    if(devParms.mathFft && devParms.mathFftSplit) {
+        devParms.fftVOffset += devParms.fftVScale;
+        if(devParms.fftVOffset > (devParms.fftVScale * 4.0))
+            devParms.fftVOffset = (devParms.fftVScale * 4.0);
+        if(devParms.mathFftUnit && (devParms.fftVScale > 9.9))
+            devParms.fftVOffset = nearbyint(devParms.fftVOffset);
+        if(devParms.modelSerie != 1) {
+            snprintf(str, 512, ":CALC:FFT:VOFF %e", devParms.fftVOffset);
+            setCueCmd(str);
+        } else {
+            snprintf(str, 512, ":MATH:OFFS %e", devParms.fftVOffset);
+            setCueCmd(str);
+        }
+
+        if(devParms.mathFftUnit == 0) {
+            strlcpy(str, "FFT position: ", 512);
+            convertToMetricSuffix(str + strlen(str), devParms.fftVOffset, 1, 512 - strlen(str));
+            strlcat(str, "V", 512);
+        } else {
+            snprintf(str, 512, "FFT position: %+.0fdB", devParms.fftVOffset);
+        }
+
+        statusLabel->setText(str);
+        waveForm->labelActive = LABEL_ACTIVE_FFT;
+        labelTimer->start(LABEL_TIMER_IVAL);
+        waveForm->update();
+        return;
+    }
+
+    chn = devParms.activechannel;
+    if(devParms.chanoffset[chn] >= 20) {
+        devParms.chanoffset[chn] = 20;
+        return;
+    }
+
+    devParms.chanoffset[chn] += devParms.chanscale[chn];
+    snprintf(str, 512, "Channel %i offset: ", chn + 1);
+    convertToMetricSuffix(str + strlen(str), devParms.chanoffset[chn], 2, 512 - strlen(str));
+    strlcat(str, devParms.chanunitstr[devParms.chanunit[chn]], 512);
+    statusLabel->setText(str);
+    waveForm->labelActive = chn + 1;
+    labelTimer->start(LABEL_TIMER_IVAL);
+    vertOffsDialTimer->start(TMC_DIAL_TIMER_DELAY);
+    waveForm->update();
+}
+
+void UiMainWindow::shiftTraceDown() {
+    int chn;
+    char str[512];
+    if(device == nullptr)
+        return;
+    if(!devParms.connected)
+        return;
+    if(devParms.activechannel < 0)
+        return;
+    if(devParms.mathFft && devParms.mathFftSplit) {
+        devParms.fftVOffset -= devParms.fftVScale;
+        if(devParms.fftVOffset < (devParms.fftVScale * -4.0))
+            devParms.fftVOffset = (devParms.fftVScale * -4.0);
+        if(devParms.mathFftUnit) {
+            if(devParms.fftVScale > 9.0)
+                devParms.fftVOffset = nearbyint(devParms.fftVOffset);
+            else
+                devParms.fftVOffset = nearbyint(devParms.fftVOffset * 10.0) / 10.0;
+        }
+
+        if(devParms.modelSerie != 1) {
+            snprintf(str, 512, ":CALC:FFT:VOFF %e", devParms.fftVOffset);
+            setCueCmd(str);
+        } else {
+            snprintf(str, 512, ":MATH:OFFS %e", devParms.fftVOffset);
+            setCueCmd(str);
+        }
+
+        if(devParms.mathFftUnit == 0) {
+            strlcpy(str, "FFT position: ", 512);
+            convertToMetricSuffix(str + strlen(str), devParms.fftVOffset, 1, 512 - strlen(str));
+            strlcat(str, "V", 512);
+        } else {
+            snprintf(str, 512, "FFT position: %+.0fdB", devParms.fftVOffset);
+        }
+
+        statusLabel->setText(str);
+        waveForm->labelActive = LABEL_ACTIVE_FFT;
+        labelTimer->start(LABEL_TIMER_IVAL);
+        waveForm->update();
+        return;
+    }
+
+    chn = devParms.activechannel;
+    if(devParms.chanoffset[chn] <= -20) {
+        devParms.chanoffset[chn] = -20;
+        return;
+    }
+
+    devParms.chanoffset[chn] -= devParms.chanscale[chn];
+    snprintf(str, 512, "Channel %i offset: ", chn + 1);
+    convertToMetricSuffix(str + strlen(str), devParms.chanoffset[chn], 2, 512 - strlen(str));
+    strlcat(str, devParms.chanunitstr[devParms.chanunit[chn]], 512);
+    statusLabel->setText(str);
+    waveForm->labelActive = chn + 1;
+    labelTimer->start(LABEL_TIMER_IVAL);
+    vertOffsDialTimer->start(TMC_DIAL_TIMER_DELAY);
+    waveForm->update();
+}
+
+void UiMainWindow::setToFactory() {
+
+    char str[512];
+    if((device == nullptr) || (!devParms.connected))
+        return;
+    QMessageBox msgBox2;
+    msgBox2.setText("Do you want to reset the instrument to the factory settings?");
+    msgBox2.setStandardButtons(QMessageBox::No | QMessageBox::Yes);
+    msgBox2.setDefaultButton(QMessageBox::No);
+    if(msgBox2.exec() != QMessageBox::Yes)
+        return;
+    scrnTimer->stop();
+    scrnThread->wait();
+    tmcWrite("*RST");
+    devParms.timebasescale = 1e-6;
+    devParms.timebaseoffset = 0;
+    devParms.timebasedelayenable = 0;
+    devParms.timebasedelayoffset = 0;
+    for(int i{}; i < MAX_CHNS; i++) {
+        devParms.chanscale[i] = 1;
+        devParms.chanoffset[i] = 0;
+        devParms.chanDisplay[i] = 0;
+        devParms.chancoupling[i] = 1;
+        devParms.chanbwlimit[i] = 0;
+        devParms.chanprobe[i] = 10;
+        devParms.chaninvert[i] = 0;
+        devParms.chanvernier[i] = 0;
+        devParms.triggeredgelevel[i] = 0;
+    }
+
+    devParms.chanDisplay[0] = 1;
+    devParms.activechannel = 0;
+    devParms.acquiretype = 0;
+    devParms.acquirememdepth = 0;
+    devParms.triggermode = 0;
+    devParms.triggeredgesource = 0;
+    devParms.triggeredgeslope = 0;
+    devParms.triggerstatus = 3;
+    devParms.triggercoupling = 1;
+    if(devParms.modelSerie == 1)
+        devParms.triggerholdoff = 1.6e-8;
+    else
+        devParms.triggerholdoff = 1e-7;
+    devParms.displaytype = 0;
+    devParms.displaygrid = 2;
+    devParms.countersrc = 0;
+    devParms.funcWrecEnable = 0;
+    statusLabel->setText("Reset to factory settings");
+    waveForm->update();
+    QMessageBox msgBox;
+    msgBox.setText("Resetting the instrument to the factory settings.\n"
+                   "Please wait...");
+    QTimer tRst1;
+    tRst1.setSingleShot(true);
+    tRst1.setTimerType(Qt::PreciseTimer);
+    connect(&tRst1, &QTimer::timeout, &msgBox, &QMessageBox::accept);
+    tRst1.start(9000);
+    msgBox.exec();
+    if(devParms.modelSerie == 6) {
+        for(int i{}; i < MAX_CHNS; i++) {
+            snprintf(str, 512, ":CHAN%i:SCAL 1", i + 1);
+            tmcWrite(str);
+            usleep(20000);
+        }
+    }
+
+    scrnTimer->start(devParms.screenTimerIval);
+}
+
+// this function is called when ScreenThread has finished
+void UiMainWindow::screenUpdate() {
+    int i, chns = 0;
+    char str[512];
+    if(device == nullptr) {
+        pthread_mutex_unlock(&devParms.mutexx);
+        return;
+    }
+
+    if(!devParms.connected) {
+        pthread_mutex_unlock(&devParms.mutexx);
+        return;
+    }
+
+    if(!devParms.screenupdatesOn) {
+        pthread_mutex_unlock(&devParms.mutexx);
+        return;
+    }
+
+    scrnThread->getParams(&devParms);
+    if(devParms.threadErrorStat) {
+        scrnTimer->stop();
+        snprintf(str,
+            512,
+            "An error occurred while reading screen data from device.\n"
+            "File ScreenThread.cpp line %i",
+            devParms.threadErrorLine);
+        QMessageBox msgBox;
+        msgBox.setIcon(QMessageBox::Critical);
+        msgBox.setText(str);
+        msgBox.exec();
+        pthread_mutex_unlock(&devParms.mutexx);
+        closeConnection();
+        return;
+    }
+
+    if(devParms.threadResult == TMC_THRD_RESULT_NONE) {
+        pthread_mutex_unlock(&devParms.mutexx);
+        return;
+    }
+
+    if(devParms.threadResult == TMC_THRD_RESULT_CMD) {
+        if(devParms.threadJob == TMC_THRD_JOB_TRIGEDGELEV) {
+            devParms.triggeredgelevel[devParms.triggeredgesource] = devParms.threadValue;
+            //      waveForm->setTrigLineVisible();
+        }
+
+        pthread_mutex_unlock(&devParms.mutexx);
+        return;
+    }
+
+    if(scrnTimer->isActive() == false) {
+        pthread_mutex_unlock(&devParms.mutexx);
+        return;
+    }
+
+    runButton->setStyleSheet(defStylesh);
+    singleButton->setStyleSheet(defStylesh);
+    if(devParms.triggerstatus == 0)
+        runButton->setStyleSheet("background: #66FF99; color: black;");
+    else if(devParms.triggerstatus == 1)
+        singleButton->setStyleSheet("background: #FF9966; color: black;");
+    else if(devParms.triggerstatus == 2)
+        runButton->setStyleSheet("background: #66FF99; color: black;");
+    else if(devParms.triggerstatus == 3)
+        runButton->setStyleSheet("background: #66FF99; color: black;");
+    else if(devParms.triggerstatus == 5)
+        runButton->setStyleSheet("background: #FF0066; color: black;");
+    if(devParms.triggersweep == 0) {
+        trigModeAutoLed->setValue(true);
+        trigModeNormLed->setValue(false);
+        trigModeSingLed->setValue(false);
+    } else if(devParms.triggersweep == 1) {
+        trigModeAutoLed->setValue(false);
+        trigModeNormLed->setValue(true);
+        trigModeSingLed->setValue(false);
+    } else if(devParms.triggersweep == 2) {
+        trigModeAutoLed->setValue(false);
+        trigModeNormLed->setValue(false);
+        trigModeSingLed->setValue(true);
+    }
+
+    if(waveForm->hasMoveEvent() == true) {
+        pthread_mutex_unlock(&devParms.mutexx);
+        return;
+    }
+
+    for(int i{}; i < MAX_CHNS; i++) {
+        if(!devParms.chanDisplay[i]) // Display data only when channel is switched on
+            continue;
+        chns++;
+    }
+
+    if(!chns) {
+        waveForm->clear();
+        pthread_mutex_unlock(&devParms.mutexx);
+        return;
+    }
+
+    //  if(devParms.triggerstatus != 1)  // Don't plot waveform data when triggerstatus is "wait"
+    if(1) {
+        if(devParms.mathDecodeDisplay)
+            serialDecoder(&devParms);
+        waveForm->drawCurve(&devParms, device);
+    } else // trigger status is "wait"
+    {
+        waveForm->update();
+    }
+
+    pthread_mutex_unlock(&devParms.mutexx);
+}
+
+void UiMainWindow::setCueCmd(const char* str) {
+    strlcpy(devParms.cmdCue[devParms.cmdCueIdxIn], str, 128);
+    devParms.cmdCueResp[devParms.cmdCueIdxIn] = nullptr;
+    devParms.cmdCueIdxIn++;
+    devParms.cmdCueIdxIn %= TMC_CMD_CUE_SZ;
+    scrnTimerHandler();
+}
+
+void UiMainWindow::setCueCmd(const char* str, char* ptr) {
+    strlcpy(devParms.cmdCue[devParms.cmdCueIdxIn], str, 128);
+    ptr[0] = 0;
+    devParms.cmdCueResp[devParms.cmdCueIdxIn] = ptr;
+    devParms.cmdCueIdxIn++;
+    devParms.cmdCueIdxIn %= TMC_CMD_CUE_SZ;
+    scrnTimerHandler();
+}

@@ -25,159 +25,91 @@
 ***************************************************************************
 */
 
-
 #include "save_data_thread.h"
 
-
-
-
-
-save_data_thread::save_data_thread(int job_s)
-{
-  job = job_s;
-
-  hdl = -1;
-
-  err_num = -1;
-
-  err_str[0] = 0;
-
-  n_bytes_rcvd = -1;
-
-  devparms = NULL;
-
-  datrecs = 0;
-
-  smps_per_record = 0;
+SaveDataThread::SaveDataThread(int job_s)
+    : job{job_s}
+    , hdl{-1}
+    , err_num{-1}
+    , err_str{0}
+    , n_bytes_rcvd{-1}
+    , devParms{nullptr}
+    , datrecs{0}
+    , smps_per_record{0} {
 }
 
-
-int save_data_thread::get_error_num(void)
-{
-  return err_num;
+int SaveDataThread::get_error_num(void) {
+    return err_num;
 }
 
-
-void save_data_thread::get_error_str(char *dest, int sz)
-{
-  strlcpy(dest, err_str, sz);
+void SaveDataThread::get_error_str(char* dest, int sz) {
+    strlcpy(dest, err_str, sz);
 }
 
-
-int save_data_thread::get_num_bytes_rcvd(void)
-{
-  return n_bytes_rcvd;
+int SaveDataThread::get_num_bytes_rcvd(void) {
+    return n_bytes_rcvd;
 }
 
+void SaveDataThread::run() {
+    err_str[0] = 0;
 
-void save_data_thread::run()
-{
-  err_str[0] = 0;
-
-  switch(job)
-  {
-    case 0: read_data();
-            break;
-    case 1: save_memory_edf_file();
-            break;
-    default: err_num = -4;
-            break;
-  }
-}
-
-
-void save_data_thread::read_data(void)
-{
-  msleep(100);
-
-  n_bytes_rcvd = tmc_read();
-
-  err_num = 0;
-}
-
-
-void save_data_thread::init_save_memory_edf_file(struct device_settings *devp, int hdl_s,
-                                                 int records, int smpls,
-                                                 short **wav)
-{
-  datrecs = records;
-
-  devparms = devp;
-
-  smps_per_record = smpls;
-
-  wavbuf = wav;
-
-  hdl = hdl_s;
-}
-
-
-void save_data_thread::save_memory_edf_file(void)
-{
-  int i, chn;
-
-  if(devparms == NULL)
-  {
-    strlcpy(err_str, "save_memory_edf_file(): Invalid devparms pointer.", 4096);
-
-    err_num = 1;
-
-    msleep(200);
-
-    return;
-  }
-
-  if(hdl < 0)
-  {
-    strlcpy(err_str, "save_memory_edf_file(): Invalid handel.", 4096);
-
-    err_num = 2;
-
-    msleep(200);
-
-    return;
-  }
-
-  msleep(100);
-
-  for(i=0; i<datrecs; i++)
-  {
-    for(chn=0; chn<MAX_CHNS; chn++)
-    {
-      if(!devparms->chandisplay[chn])
-      {
-        continue;
-      }
-
-      if(edfwrite_digital_short_samples(hdl, wavbuf[chn] + (i * smps_per_record)))
-      {
-        strlcpy(err_str, "A file write error occurred.", 4096);
-
-        err_num = 3;
-
-        return;
-      }
+    switch(job) {
+    case 0:
+        read_data();
+        break;
+    case 1:
+        save_memory_edf_file();
+        break;
+    default:
+        err_num = -4;
+        break;
     }
-  }
-
-  err_num = 0;
 }
 
+void SaveDataThread::read_data(void) {
+    msleep(100);
+    n_bytes_rcvd = tmcRead();
+    err_num = 0;
+}
 
+void SaveDataThread::init_save_memory_edf_file(
+    struct DeviceSettings* devp, int hdl_s, int records, int smpls, short** wav) {
+    datrecs = records;
+    devParms = devp;
+    smps_per_record = smpls;
+    wavBuf = wav;
+    hdl = hdl_s;
+}
 
+void SaveDataThread::save_memory_edf_file(void) {
+    if(devParms == nullptr) {
+        strlcpy(err_str, "save_memory_edf_file(): Invalid devParms pointer.", 4096);
+        err_num = 1;
+        msleep(200);
+        return;
+    }
 
+    if(hdl < 0) {
+        strlcpy(err_str, "save_memory_edf_file(): Invalid handel.", 4096);
+        err_num = 2;
+        msleep(200);
+        return;
+    }
 
+    msleep(100);
 
+    for(int i{}; i < datrecs; i++) {
+        for(int chn{}; chn < MAX_CHNS; chn++) {
+            if(!devParms->chanDisplay[chn])
+                continue;
 
+            if(edfwrite_digital_short_samples(hdl, wavBuf[chn] + (i * smps_per_record))) {
+                strlcpy(err_str, "A file write error occurred.", 4096);
+                err_num = 3;
+                return;
+            }
+        }
+    }
 
-
-
-
-
-
-
-
-
-
-
-
+    err_num = 0;
+}

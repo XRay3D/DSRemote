@@ -25,22 +25,18 @@
 ***************************************************************************
 */
 
+#pragma once
 
-
-#ifndef WAVECURVE_H
-#define WAVECURVE_H
-
-
-#include <QtGlobal>
-#include <QWidget>
+#include <QFont>
 #include <QMouseEvent>
 #include <QPainter>
 #include <QPainterPath>
-#include <QPushButton>
 #include <QPen>
+#include <QPushButton>
 #include <QString>
 #include <QStringList>
-#include <QFont>
+#include <QWidget>
+#include <QtGlobal>
 
 #include <stdio.h>
 #include <stdlib.h>
@@ -50,82 +46,66 @@
 #include "utils.h"
 #include "wave_dialog.h"
 
+class UiWaveWindow;
 
-class UI_wave_window;
-
-
-class WaveCurve: public QWidget
-{
-  Q_OBJECT
+class WaveCurve : public QWidget {
+    Q_OBJECT
 
 public:
-  WaveCurve(QWidget *parent=0);
+    WaveCurve(QWidget* parent = 0);
 
-  QSize sizeHint() const {return minimumSizeHint(); }
-  QSize minimumSizeHint() const {return QSize(30,10); }
+    QSize sizeHint() const { return minimumSizeHint(); }
+    QSize minimumSizeHint() const { return QSize(30, 10); }
 
-  void setSignalColor1(QColor);
-  void setSignalColor2(QColor);
-  void setSignalColor3(QColor);
-  void setSignalColor4(QColor);
-  void setTraceWidth(int);
-  void setBackgroundColor(QColor);
-  void setRasterColor(QColor);
-  void setTextColor(QColor);
-  void setBorderSize(int);
-  void setDeviceParameters(struct device_settings *);
-
+    void setSignalColor1(QColor);
+    void setSignalColor2(QColor);
+    void setSignalColor3(QColor);
+    void setSignalColor4(QColor);
+    void setTraceWidth(int);
+    void setBackgroundColor(QColor);
+    void setRasterColor(QColor);
+    void setTextColor(QColor);
+    void setBorderSize(int);
+    void setDeviceParameters(struct DeviceSettings*);
 
 private slots:
 
 private:
+    QColor SignalColor[MAX_CHNS], BackgroundColor, RasterColor, TextColor;
 
-  QColor SignalColor[MAX_CHNS],
-         BackgroundColor,
-         RasterColor,
-         TextColor;
+    QFont smallfont;
 
-  QFont smallfont;
+    double v_sense;
 
-  double v_sense;
+    int bufSize,
+        borderSize,
+        traceWidth,
+        w, h, oldW,
+        chanArrowPos[MAX_CHNS],
+        trigLevelArrowPos,
+        trigPosArrowPos,
+        useMoveEvents,
+        mouseX,
+        mouseY,
+        mouseOldX,
+        mouseOldY;
 
-  int bufsize,
-      bordersize,
-      tracewidth,
-      w,
-      h,
-      old_w,
-      chan_arrow_pos[MAX_CHNS],
-      trig_level_arrow_pos,
-      trig_pos_arrow_pos,
-      use_move_events,
-      mouse_x,
-      mouse_y,
-      mouse_old_x,
-      mouse_old_y;
+    void drawArrow(QPainter*, int, int, int, QColor, char);
+    void drawSmallTriggerArrow(QPainter*, int, int, int, QColor);
+    void drawTrigCenterArrow(QPainter*, int, int);
+    void drawTopLabels(QPainter*);
+    void drawChanLabel(QPainter*, int, int, int);
+    void paintLabel(QPainter*, int, int, int, int, const char*, QColor);
+    void drawDecoder(QPainter*, int, int);
+    int asciiDecodeControlChar(char, char*, int);
 
-  void drawArrow(QPainter *, int, int, int, QColor, char);
-  void drawSmallTriggerArrow(QPainter *, int, int, int, QColor);
-  void drawTrigCenterArrow(QPainter *, int, int);
-  void drawTopLabels(QPainter *);
-  void drawChanLabel(QPainter *, int, int, int);
-  void paintLabel(QPainter *, int, int, int, int, const char *, QColor);
-  void draw_decoder(QPainter *, int, int);
-  int ascii_decode_control_char(char, char *, int);
+    struct DeviceSettings* devParms;
 
-  struct device_settings *devparms;
-
-  UI_wave_window *wavedialog;
+    UiWaveWindow* wavedialog;
 
 protected:
-  void paintEvent(QPaintEvent *);
-  void mousePressEvent(QMouseEvent *);
-  void mouseReleaseEvent(QMouseEvent *);
-  void mouseMoveEvent(QMouseEvent *);
-
+    void paintEvent(QPaintEvent*);
+    void mousePressEvent(QMouseEvent*);
+    void mouseReleaseEvent(QMouseEvent*);
+    void mouseMoveEvent(QMouseEvent*);
 };
-
-
-#endif
-
-

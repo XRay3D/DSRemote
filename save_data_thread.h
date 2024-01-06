@@ -25,10 +25,7 @@
 ***************************************************************************
 */
 
-
-#ifndef DEF_SAVE_DATA_THREAD_H
-#define DEF_SAVE_DATA_THREAD_H
-
+#pragma once
 
 #include <stdio.h>
 #include <stdlib.h>
@@ -38,72 +35,34 @@
 #include <QObject>
 #include <QThread>
 
-#include "global.h"
-#include "utils.h"
 #include "connection.h"
-#include "tmc_dev.h"
 #include "edflib.h"
+#include "global.h"
+#include "tmc_dev.h"
+#include "utils.h"
 
-
-
-
-class save_data_thread : public QThread
-{
-  Q_OBJECT
+class SaveDataThread : public QThread {
+    Q_OBJECT
 
 public:
+    SaveDataThread(int);
 
-  save_data_thread(int);
-
-  int get_error_num(void);
-  void get_error_str(char *, int);
-  int get_num_bytes_rcvd(void);
-  void init_save_memory_edf_file(struct device_settings *devp, int,
-                                 int, int, short **wav);
+    int get_error_num(void);
+    void get_error_str(char*, int);
+    int get_num_bytes_rcvd(void);
+    void init_save_memory_edf_file(struct DeviceSettings* devp, int, int, int, short** wav);
 
 private:
+    int job, err_num, n_bytes_rcvd, hdl, datrecs, smps_per_record;
 
-  int job,
-      err_num,
-      n_bytes_rcvd,
-      hdl,
-      datrecs,
-      smps_per_record;
+    char err_str[4096];
 
-  char err_str[4096];
+    struct DeviceSettings* devParms;
 
-  struct device_settings *devparms;
+    short** wavBuf;
 
-  short **wavbuf;
+    void run();
 
-  void run();
-
-  void read_data(void);
-  void save_memory_edf_file(void);
+    void read_data(void);
+    void save_memory_edf_file(void);
 };
-
-
-
-#endif
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-

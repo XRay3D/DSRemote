@@ -3,7 +3,7 @@
 *
 * Author: Teunis van Beelen
 *
-* Copyright (C) 2016 - 2020 Teunis van Beelen
+* Copyright (C) 2015 - 2020 Teunis van Beelen
 *
 * Email: teuniz@protonmail.com
 *
@@ -25,24 +25,27 @@
 ***************************************************************************
 */
 
-#include "lan_connect_thread.h"
+#pragma once
 
-LanConnectThread::LanConnectThread() {
-    device = nullptr;
-    devStr[0] = 0;
-}
+#include <QObject>
 
-void LanConnectThread::run() {
-    msleep(300);
-    if(devStr[0] == 0)
-        return;
-    device = tmcOpenLan(devStr);
-}
+class QTcpSocket;
 
-struct tmcDev* LanConnectThread::getDevice(void) {
-    return device;
-}
+inline class TMCLan : public QObject {
+    Q_OBJECT
+    QTcpSocket* socket{};
+    int sockfd{-1};
 
-void LanConnectThread::setDeviceAddress(const char* addr) {
-    strlcpy(devStr, addr, 64);
-}
+public:
+    TMCLan(QObject* parent = nullptr);
+    virtual ~TMCLan() { }
+    struct tmcDev* tmcLanOpen(std::string_view);
+    void tmcLanClose(struct tmcDev*);
+    int tmcLanWrite(struct tmcDev*, std::string_view);
+    int tmcLanRead(struct tmcDev*);
+} tmcLan;
+
+inline struct tmcDev* tmcLanOpen(const char* addr) { return tmcLan.tmcLanOpen(addr); }
+inline void tmcLanClose(struct tmcDev* dev) { return tmcLan.tmcLanClose(dev); }
+inline int tmcLanWrite(struct tmcDev* dev, const char* str) { return tmcLan.tmcLanWrite(dev, str); }
+inline int tmcLanRead(struct tmcDev* dev) { return tmcLan.tmcLanRead(dev); }

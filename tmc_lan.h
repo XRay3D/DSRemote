@@ -25,44 +25,17 @@
 ***************************************************************************
 */
 
-
-#ifndef TMC_LAN_H
-#define TMC_LAN_H
-
+#pragma once
 
 #ifdef __cplusplus
 extern "C" {
 #endif
 
-
-struct tmcdev * tmclan_open(const char *);
-void tmclan_close(struct tmcdev *);
-int tmclan_write(struct tmcdev *, const char *);
-int tmclan_read(struct tmcdev *);
-
+struct tmcdev* tmclan_open(const char*);
+void tmclan_close(struct tmcdev*);
+int tmclan_write(struct tmcdev*, const char*);
+int tmclan_read(struct tmcdev*);
 
 #ifdef __cplusplus
 } /* extern "C" */
 #endif
-
-
-#endif
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-

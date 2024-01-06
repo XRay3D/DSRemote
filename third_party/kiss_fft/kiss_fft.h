@@ -1,5 +1,5 @@
-#ifndef KISS_FFT_H
-#define KISS_FFT_H
+#pragma once
+#pragma once
 
 #include <stdlib.h>
 #include <stdio.h>
@@ -81,7 +81,7 @@ typedef struct kiss_fft_state* kiss_fft_cfg;
 kiss_fft_cfg kiss_fft_alloc(int nfft,int inverse_fft,void * mem,size_t * lenmem);
 
 /*
- * kiss_fft(cfg,in_out_buf)
+ * kiss_fft(cfg,in_out_Buf)
  *
  * Perform an FFT on a complex input buffer.
  * for a forward FFT,
@@ -121,4 +121,3 @@ int kiss_fft_next_fast_size(int n);
 }
 #endif
 
-#endif

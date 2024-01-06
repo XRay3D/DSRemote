@@ -25,78 +25,52 @@
 ***************************************************************************
 */
 
-
-
-
-
 #include "tled.h"
 
-
-TLed::TLed(QWidget *p) : QWidget(p)
-{
-  OnColor = QColor(Qt::green);
-  OffColor = QColor(Qt::darkGreen);
-  value = false;
+Led::Led(QWidget* p)
+    : QWidget(p) {
+    OnColor = QColor(Qt::green);
+    OffColor = QColor(Qt::darkGreen);
+    value = false;
 }
 
-
-void TLed::paintEvent(QPaintEvent *)
-{
-  QPainter paint(this);
-#if QT_VERSION >= 0x050000
-  paint.setRenderHint(QPainter::Qt4CompatiblePainting, true);
-#endif
-  drawLed(&paint);
+void Led::paintEvent(QPaintEvent*) {
+    QPainter paint{this};
+    drawLed(&paint);
 }
 
+void Led::drawLed(QPainter* painter) {
+    painter->save();
 
-void TLed::drawLed(QPainter *painter)
-{
-  int w, h, m, n, o;
+    const double w = width() - 1;
+    const double h = height() - 1;
+    const double m = std::min(w, h);
+    const double n = m / 2;
+    const double o = m / 3;
+    const QColor color = value ? OnColor : OffColor;
+    painter->setRenderHint(QPainter::Antialiasing);
+    painter->translate(.5, .5);
+    QRadialGradient gradient{n, n, n, o, o};
+    if(value) gradient.setColorAt(0.001, Qt::white);
+    gradient.setColorAt(0.9, color);
+    gradient.setColorAt(1, Qt::black);
+    painter->setBrush(gradient);
+    painter->drawEllipse(0, 0, m, m);
 
-  QColor color;
-
-  painter->save();
-
-  w = this->width();
-  h = this->height();
-  m = qMin(w,h);
-  n = m / 2;
-  o = m / 3;
-  if(value)  color = OnColor;
-  else  color = OffColor;
-
-  painter->setRenderHint(QPainter::Antialiasing);
-  QRadialGradient gradient(n, n, n, o, o);
-  if(value)  gradient.setColorAt(0.001, Qt::white);
-  gradient.setColorAt(0.9, color);
-  gradient.setColorAt(1, Qt::black);
-  painter->setBrush(gradient);
-  painter->drawEllipse(0, 0, m, m);
-
-  painter->restore();
+    painter->restore();
 }
 
-
-void TLed::setOnColor(QColor newColor)
-{
-  OnColor = newColor;
-  update();
+void Led::setOnColor(QColor newColor) {
+    OnColor = newColor;
+    update();
 }
 
-
-void TLed::setOffColor(QColor newColor)
-{
-  OffColor = newColor;
-  update();
+void Led::setOffColor(QColor newColor) {
+    OffColor = newColor;
+    update();
 }
 
-
-void TLed::setValue(bool newValue)
-{
-  value = newValue;
-  update();
+void Led::setValue(bool newValue) {
+    value = newValue;
+    update();
 }
-
-
-
