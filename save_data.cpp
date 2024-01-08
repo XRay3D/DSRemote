@@ -185,7 +185,7 @@ void UiMainWindow::getDeepMemoryWaveform(void) {
     statusLabel->setText("Downloading data...");
 
     for(int i{}; i < MAX_CHNS; i++) {
-        if(!devParms.chanDisplay[i])
+        if(!devParms.chan[i].Display)
             continue;
 
         chns++;
@@ -202,7 +202,7 @@ void UiMainWindow::getDeepMemoryWaveform(void) {
     }
 
     for(int i{}; i < MAX_CHNS; i++) {
-        if(!devParms.chanDisplay[i]) // Download data only when channel is switched on
+        if(!devParms.chan[i].Display) // Download data only when channel is switched on
             continue;
 
         wavBuf[i] = (short*)malloc(mempnts * sizeof(short));
@@ -217,7 +217,7 @@ void UiMainWindow::getDeepMemoryWaveform(void) {
     usleep(20000);
 
     for(chn = 0; chn < MAX_CHNS; chn++) {
-        if(!devParms.chanDisplay[chn]) // Download data only when channel is switched on
+        if(!devParms.chan[chn].Display) // Download data only when channel is switched on
             continue;
 
         snprintf(str, 512, "Downloading channel %i waveform data...", chn + 1);
@@ -241,13 +241,13 @@ void UiMainWindow::getDeepMemoryWaveform(void) {
 
         tmcRead();
 
-        devParms.yinc[chn] = atof(device->buf);
+        devParms.chan[chn].yinc = atof(device->buf);
 
-        if(devParms.yinc[chn] < 1e-6) {
+        if(devParms.chan[chn].yinc < 1e-6) {
             snprintf(str,
                 512,
                 "Error, parameter \"YINC\" out of range: %e  line %i file %s",
-                devParms.yinc[chn],
+                devParms.chan[chn].yinc,
                 __LINE__,
                 __FILE__);
             goto OUT_ERROR;
@@ -281,13 +281,13 @@ void UiMainWindow::getDeepMemoryWaveform(void) {
 
         tmcRead();
 
-        devParms.yor[chn] = atoi(device->buf);
+        devParms.chan[chn].yor = atoi(device->buf);
 
-        if((devParms.yor[chn] < -255) || (devParms.yor[chn] > 255)) {
+        if((devParms.chan[chn].yor < -255) || (devParms.chan[chn].yor > 255)) {
             snprintf(str,
                 512,
                 "Error, parameter \"YOR\" out of range: %i  line %i file %s",
-                devParms.yor[chn],
+                devParms.chan[chn].yor,
                 __LINE__,
                 __FILE__);
             goto OUT_ERROR;
@@ -361,7 +361,7 @@ void UiMainWindow::getDeepMemoryWaveform(void) {
                     break;
 
                 wavBuf[chn][bytes_rcvd + k]
-                    = ((int)(((unsigned char*)device->buf)[k]) - yref[chn] - devParms.yor[chn])
+                    = ((int)(((unsigned char*)device->buf)[k]) - yref[chn] - devParms.chan[chn].yor)
                     << 5;
             }
 
@@ -380,7 +380,7 @@ void UiMainWindow::getDeepMemoryWaveform(void) {
     progress.reset();
 
     for(chn = 0; chn < MAX_CHNS; chn++) {
-        if(!devParms.chanDisplay[chn])
+        if(!devParms.chan[chn].Display)
             continue;
 
         snprintf(str, 512, ":WAV:SOUR CHAN%i", chn + 1);
@@ -454,7 +454,7 @@ OUT_ERROR:
     }
 
     for(chn = 0; chn < MAX_CHNS; chn++) {
-        if(!devParms.chanDisplay[chn])
+        if(!devParms.chan[chn].Display)
             continue;
 
         snprintf(str, 512, ":WAV:SOUR CHAN%i", chn + 1);
@@ -498,7 +498,7 @@ void UiMainWindow::saveWaveInspectorBufferToEdf(struct DeviceSettings* d_parms) 
     smps_per_record = mempnts;
 
     for(int i{}; i < MAX_CHNS; i++) {
-        if(!d_parms->chanDisplay[i])
+        if(!d_parms->chan[i].Display)
             continue;
 
         chns++;
@@ -578,19 +578,19 @@ void UiMainWindow::saveWaveInspectorBufferToEdf(struct DeviceSettings* d_parms) 
     j = 0;
 
     for(chn = 0; chn < MAX_CHNS; chn++) {
-        if(!d_parms->chanDisplay[chn])
+        if(!d_parms->chan[chn].Display)
             continue;
 
         edf_set_samplefrequency(hdl, j, smps_per_record);
         edf_set_digital_maximum(hdl, j, 32767);
         edf_set_digital_minimum(hdl, j, -32768);
-        if(d_parms->chanscale[chn] > 2) {
-            edf_set_physical_maximum(hdl, j, d_parms->yinc[chn] * 32767.0 / 32.0);
-            edf_set_physical_minimum(hdl, j, d_parms->yinc[chn] * -32768.0 / 32.0);
+        if(d_parms->chan[chn].scale > 2) {
+            edf_set_physical_maximum(hdl, j, d_parms->chan[chn].yinc * 32767.0 / 32.0);
+            edf_set_physical_minimum(hdl, j, d_parms->chan[chn].yinc * -32768.0 / 32.0);
             edf_set_physical_dimension(hdl, j, "V");
         } else {
-            edf_set_physical_maximum(hdl, j, 1000.0 * d_parms->yinc[chn] * 32767.0 / 32.0);
-            edf_set_physical_minimum(hdl, j, 1000.0 * d_parms->yinc[chn] * -32768.0 / 32.0);
+            edf_set_physical_maximum(hdl, j, 1000.0 * d_parms->chan[chn].yinc * 32767.0 / 32.0);
+            edf_set_physical_minimum(hdl, j, 1000.0 * d_parms->chan[chn].yinc * -32768.0 / 32.0);
             edf_set_physical_dimension(hdl, j, "mV");
         }
         snprintf(str, 512, "CHAN%i", chn + 1);
@@ -726,7 +726,7 @@ void UiMainWindow::saveScreenWaveform() {
     }
 
     for(chn = 0; chn < MAX_CHNS; chn++) {
-        if(!devParms.chanDisplay[chn]) // Download data only when channel is switched on
+        if(!devParms.chan[chn].Display) // Download data only when channel is switched on
             continue;
 
         wavBuf[chn] = (short*)malloc(WAVFRM_MAX_BUFSZ * sizeof(short));
@@ -744,7 +744,7 @@ void UiMainWindow::saveScreenWaveform() {
     }
 
     for(chn = 0; chn < MAX_CHNS; chn++) {
-        if(!devParms.chanDisplay[chn]) // Download data only when channel is switched on
+        if(!devParms.chan[chn].Display) // Download data only when channel is switched on
             continue;
 
         usleep(20000);
@@ -769,13 +769,13 @@ void UiMainWindow::saveScreenWaveform() {
 
         tmcRead();
 
-        devParms.yinc[chn] = atof(device->buf);
+        devParms.chan[chn].yinc = atof(device->buf);
 
-        if(devParms.yinc[chn] < 1e-6) {
+        if(devParms.chan[chn].yinc < 1e-6) {
             snprintf(str,
                 512,
                 "Error, parameter \"YINC\" out of range: %e  line %i file %s",
-                devParms.yinc[chn],
+                devParms.chan[chn].yinc,
                 __LINE__,
                 __FILE__);
             goto OUT_ERROR;
@@ -809,13 +809,13 @@ void UiMainWindow::saveScreenWaveform() {
 
         tmcRead();
 
-        devParms.yor[chn] = atoi(device->buf);
+        devParms.chan[chn].yor = atoi(device->buf);
 
-        if((devParms.yor[chn] < -255) || (devParms.yor[chn] > 255)) {
+        if((devParms.chan[chn].yor < -255) || (devParms.chan[chn].yor > 255)) {
             snprintf(str,
                 512,
                 "Error, parameter \"YOR\" out of range: %i  line %i file %s",
-                devParms.yor[chn],
+                devParms.chan[chn].yor,
                 __LINE__,
                 __FILE__);
             goto OUT_ERROR;
@@ -855,7 +855,7 @@ void UiMainWindow::saveScreenWaveform() {
 
         for(int i{}; i < n; i++)
             wavBuf[chn][i]
-                = ((int)(((unsigned char*)device->buf)[i]) - yref[chn] - devParms.yor[chn]) << 5;
+                = ((int)(((unsigned char*)device->buf)[i]) - yref[chn] - devParms.chan[chn].yor) << 5;
     }
 
     opath[0] = 0;
@@ -890,19 +890,19 @@ void UiMainWindow::saveScreenWaveform() {
     j = 0;
 
     for(chn = 0; chn < MAX_CHNS; chn++) {
-        if(!devParms.chanDisplay[chn])
+        if(!devParms.chan[chn].Display)
             continue;
 
         edf_set_samplefrequency(hdl, j, n);
         edf_set_digital_maximum(hdl, j, 32767);
         edf_set_digital_minimum(hdl, j, -32768);
-        if(devParms.chanscale[chn] > 2) {
-            edf_set_physical_maximum(hdl, j, devParms.yinc[chn] * 32767.0 / 32.0);
-            edf_set_physical_minimum(hdl, j, devParms.yinc[chn] * -32768.0 / 32.0);
+        if(devParms.chan[chn].scale > 2) {
+            edf_set_physical_maximum(hdl, j, devParms.chan[chn].yinc * 32767.0 / 32.0);
+            edf_set_physical_minimum(hdl, j, devParms.chan[chn].yinc * -32768.0 / 32.0);
             edf_set_physical_dimension(hdl, j, "V");
         } else {
-            edf_set_physical_maximum(hdl, j, 1000.0 * devParms.yinc[chn] * 32767.0 / 32.0);
-            edf_set_physical_minimum(hdl, j, 1000.0 * devParms.yinc[chn] * -32768.0 / 32.0);
+            edf_set_physical_maximum(hdl, j, 1000.0 * devParms.chan[chn].yinc * 32767.0 / 32.0);
+            edf_set_physical_minimum(hdl, j, 1000.0 * devParms.chan[chn].yinc * -32768.0 / 32.0);
             edf_set_physical_dimension(hdl, j, "mV");
         }
         snprintf(str, 512, "CHAN%i", chn + 1);
@@ -914,7 +914,7 @@ void UiMainWindow::saveScreenWaveform() {
     edf_set_equipment(hdl, devParms.modelName);
 
     for(chn = 0; chn < MAX_CHNS; chn++) {
-        if(!devParms.chanDisplay[chn])
+        if(!devParms.chan[chn].Display)
             continue;
 
         if(edfwrite_digital_short_samples(hdl, wavBuf[chn])) {

@@ -2685,10 +2685,7 @@
        <property name="title">
         <string>Logical</string>
        </property>
-       <layout class="QVBoxLayout" name="verticalLayout">
-        <property name="spacing">
-         <number>3</number>
-        </property>
+       <layout class="QGridLayout" name="gridLogic" columnstretch="1,2">
         <property name="leftMargin">
          <number>3</number>
         </property>
@@ -2701,7 +2698,10 @@
         <property name="bottomMargin">
          <number>3</number>
         </property>
-        <item>
+        <property name="spacing">
+         <number>3</number>
+        </property>
+        <item row="0" column="0" colspan="2">
          <widget class="QPushButton" name="laButton">
           <property name="text">
            <string>Menu</string>

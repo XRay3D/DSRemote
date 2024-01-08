@@ -140,10 +140,8 @@ UiWaveWindow::UiWaveWindow(struct DeviceSettings* p_devParms,
 }
 
 UiWaveWindow::~UiWaveWindow() {
-
     for(int i{}; i < MAX_CHNS; i++)
         free(devParms->waveBuf[i]);
-
     free(devParms);
 }
 

@@ -57,8 +57,8 @@ void ScreenThread::setParams(struct DeviceSettings* dev_parms) {
     params.connected = deviceParms->connected;
     params.modelserie = deviceParms->modelSerie;
     for(int i{}; i < MAX_CHNS; ++i) {
-        params.chanDisplay[i] = deviceParms->chanDisplay[i];
-        params.chanscale[i] = deviceParms->chanscale[i];
+        params.chanDisplay[i] = deviceParms->chan[i].Display;
+        params.chanScale[i] = deviceParms->chan[i].scale;
     }
     params.countersrc = deviceParms->countersrc;
     params.cmdCueIdxIn = deviceParms->cmdCueIdxIn;
@@ -91,7 +91,7 @@ void ScreenThread::getParams(struct DeviceSettings* dev_parms) {
     for(int i{}; i < MAX_CHNS; i++) {
         if(params.chanDisplay[i]) {
             memcpy(dev_parms->waveBuf[i], params.waveBuf[i], params.waveBufsz * sizeof(short));
-            dev_parms->xorigin[i] = params.xorigin[i];
+            dev_parms->chan[i].xorigin = params.xorigin[i];
         }
     }
     dev_parms->threadErrorStat = params.errorStat;
@@ -571,7 +571,7 @@ void ScreenThread::run() {
             //            wfp.xincrement[i], wfp.xorigin[i], wfp.xreference[i],
             //            wfp.yincrement[i], wfp.yorigin[i], wfp.yreference[i]);
             //
-            //     printf("chanoffset[] is %e\n", params.chanoffset[i]);
+            //     printf("chan[] is %e\n", params.chanoffset[i].offset);
 
             //     rec_len = wfp.xincrement[i] * wfp.points;
 
@@ -644,9 +644,9 @@ void ScreenThread::run() {
             if((n == (params.fftBufsz * 2)) && (params.mathFft == 1)
                 && (channel == params.mathFftSrc)) {
                 if(params.modelserie == 6)
-                    y_incr = params.chanscale[channel] / 32.0;
+                    y_incr = params.chanScale[channel] / 32.0;
                 else
-                    y_incr = params.chanscale[channel] / 25.0;
+                    y_incr = params.chanScale[channel] / 25.0;
 
                 binsz = (double)params.currentScreenSf / (params.fftBufsz * 2.0);
 

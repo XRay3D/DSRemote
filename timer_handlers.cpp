@@ -144,7 +144,7 @@ void UiMainWindow::vertOffsDialTimerHandler() {
 
     chn = devParms.activechannel;
 
-    snprintf(str, 512, ":CHAN%i:OFFS %e", chn + 1, devParms.chanoffset[chn]);
+    snprintf(str, 512, ":CHAN%i:OFFS %e", chn + 1, devParms.chan[chn].offset);
 
     setCueCmd(str);
 }
@@ -170,7 +170,7 @@ void UiMainWindow::vertScaleDialTimerHandler() {
 
     chn = devParms.activechannel;
 
-    snprintf(str, 512, ":CHAN%i:SCAL %e", chn + 1, devParms.chanscale[chn]);
+    snprintf(str, 512, ":CHAN%i:SCAL %e", chn + 1, devParms.chan[chn].scale);
 
     setCueCmd(str);
 }

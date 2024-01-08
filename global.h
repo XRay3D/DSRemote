@@ -66,7 +66,7 @@ enum {
     LABEL_ACTIVE_TRIG =        5,
     LABEL_ACTIVE_FFT =         6,
 
-    TMC_GDS_DELAY =            10000,
+    TMC_GDS_DELAY =            10000, // us
 
     TMC_CMD_CUE_SZ =           1024,
 
@@ -95,6 +95,37 @@ enum {
     // clang-format on
 };
 
+enum CHAN {
+    OFF,
+    CH_AN_1,
+    CH_AN_2,
+    CH_AN_3,
+    CH_AN_4,
+    EXT,
+    EXT5,
+    AC,
+    ACL = AC,
+};
+
+enum CHD {
+    CH_DI_0,
+    CH_DI_1,
+    CH_DI_2,
+    CH_DI_3,
+    CH_DI_4,
+    CH_DI_5,
+    CH_DI_6,
+    CH_DI_7,
+    CH_DI_8,
+    CH_DI_9,
+    CH_DI_10,
+    CH_DI_11,
+    CH_DI_12,
+    CH_DI_13,
+    CH_DI_14,
+    CH_DI_15,
+};
+
 struct WaveformPreamble {
     int format;
     int type;
@@ -108,7 +139,105 @@ struct WaveformPreamble {
     int yReference[MAX_CHNS];
 };
 
+enum class Coup { // Coupling
+    GND,
+    DC,
+    AC
+};
+
+struct Channel {
+    int bwlimit;   // 20, 250 or 0MHz (off)
+    Coup coupling; // 0=GND, 1=DC, 2=AC
+    bool Display;  // 0=off, 1=on
+    int impedance; // 0=1MOhm, 1=50Ohm
+    int invert;    // 0=normal, 1=inverted
+    int unit;      // 0=V, 1=W, 2=A, 3=U
+    char unitstr[2];
+    double offset; // expressed in volts
+    double probe;  // Probe attenuation ratio e.g. 10:1
+    double scale;
+    int vernier;                // Vernier 1=on, 0=off (fine adjustment of vertical scale)
+    double mathDecodeThreshold; // 0: threshold of decode channel 1 (SPI:MISO for modelserie 6)
+                                // 1: threshold of decode channel 2 (SPI:MOSI for modelserie 6)
+                                // 2: threshold of decode channel 3 (SPI:SCLK for modelserie 6)
+                                // 3: threshold of decode channel 4 (SPI:SS for modelserie 6)
+                                // (-4 x VerticalScale - VerticalOffset) to
+                                // (4 x VerticalScale - VerticalOffset)
+    double yinc;
+    int yor;
+    double xorigin;
+};
+
+struct LA {
+    enum Digital {
+        D0,
+        D1,
+        D2,
+        D3,
+        D4,
+        D5,
+        D6,
+        D7,
+        D8,
+        D9,
+        D10,
+        D11,
+        D12,
+        D13,
+        D14,
+        D15,
+        Count
+    };
+    enum Group {
+        GROUP1 = D15 + 1,
+        GROUP2,
+        GROUP3,
+        GROUP4
+    };
+    enum Pod { // POD1 (D0 to D7) and POD2 (D8 to D15).
+        POD1,
+        POD2
+    };
+
+    enum Size {
+        SMALl,
+        LARGe
+    };
+
+    int ACTive; // Digital | Group
+
+    bool AUTosort; // 0: waveforms on the screen are D15 to D0 from top to bottom
+                   // 1: waveforms on the screen are D0 to D15 from top to bottom
+    struct DIGital {
+        bool DISPlay; // Num 0 to 15 {{1|ON}|{0|OFF}}
+
+        int POSition; // Num 0 to 15 When the waveform display mode is SMALl: 0 to 15
+                      // When the waveform display mode is LARGe: 0 to 7
+                      // For the waveform display mode, refer to the :LA:SIZE command
+
+        char LABel[4]{}; // It can include English uppercase letters (A to Z)
+                         // and numbers (0 to 9).
+                         // It cannot exceed 4 characters.
+
+    } DIGital[Count];
+
+    int DISPlay;           // Digital | Group | Pod
+    bool PODDISPlay[2];    // Num 1 | 2 {{1|ON}|{0|OFF}}
+    float PODTHReshold[2]; // Num 1 | 2 -15.0V to +15.0V
+    Size SIZE;             // SMALl: up to 16 waveforms can be displayed on
+                           // the screen (0 to 15 from top to bottom).
+                           // LARGe: up to 8 waveforms can be displayed on
+                           // the screen (0 to 7 from top to bottom).
+                           // The LARGe display mode is only available when
+                           // the number of channels currently turned on is no more than 8.
+    bool STATe;            //{{1|ON}|{0|OFF}}
+    double TCALibrate;     // -100ns to 100ns
+};
+
 struct DeviceSettings {
+    Channel chan[MAX_CHNS];
+    short* waveBuf[MAX_CHNS];
+
     int connected;
     int connectionType; // 0=USB, 1=LAN
     char modelName[128];
@@ -126,18 +255,7 @@ struct DeviceSettings {
     int channelCnt; // Device has 2 or 4 channels
     int bandwidth;  // Bandwidth in MHz
 
-    int chanbwlimit[MAX_CHNS];   // 20, 250 or 0MHz (off)
-    int chancoupling[MAX_CHNS];  // 0=GND, 1=DC, 2=AC
-    int chanDisplay[MAX_CHNS];   // 0=off, 1=on
-    int chanimpedance[MAX_CHNS]; // 0=1MOhm, 1=50Ohm
-    int chaninvert[MAX_CHNS];    // 0=normal, 1=inverted
-    int chanunit[MAX_CHNS];      // 0=V, 1=W, 2=A, 3=U
-    char chanunitstr[4][2];
-    double chanoffset[MAX_CHNS]; // expressed in volts
-    double chanprobe[MAX_CHNS];  // Probe attenuation ratio e.g. 10:1
-    double chanscale[MAX_CHNS];
-    int chanvernier[MAX_CHNS]; // Vernier 1=on, 0=off (fine adjustment of vertical scale)
-    int activechannel;         // Last pressed channel button (used to know at which channel to apply scale change)
+    int activechannel; // Last pressed channel button (used to know at which channel to apply scale change)
 
     double timebaseoffset; // Main timebase offset in Sec
                            // MemDepth/SamplingRate to 1s (when TimeScale < 20ms)
@@ -154,15 +272,15 @@ struct DeviceSettings {
     int timebasexy1display; // XY mode for channel 1 & 2,  1=on, 0=off
     int timebasexy2display; // XY mode for channel 3 & 4,  1=on, 0=off
 
-    int triggercoupling;        // 0=AC, 1=DC, 2=LFReject, 3=HFReject
-    double triggeredgelevel[7]; // Trigger level
-    int triggeredgeslope;       // 0=POS, 1=NEG, 2= RFAL
-    int triggeredgesource;      // 0=chan1, 1=chan2, 2=chan3, 3=chan4, 4=ext, 5=ext5, 6=acl
-    double triggerholdoff;      // min. is 16nSec or 100nSec depends on series
-    int triggermode;            // 0=edge, 1=pulse, 2=slope, 3=video, 4=pattern, 5=rs232,
-                                // 6=i2c, 7=spi, 8=can, 9=usb
-    int triggerstatus;          // 0=td, 1=wait, 2=run, 3=auto, 4=fin, 5=stop
-    int triggersweep;           // 0=auto, 1=normal, 2=single
+    int triggercoupling;                               // 0=AC, 1=DC, 2=LFReject, 3=HFReject
+    double triggeredgelevel[7 /* FIXME CHAN::COUNT*/]; // Trigger level
+    int triggeredgeslope;                              // 0=POS, 1=NEG, 2= RFAL
+    CHAN triggeredgesource;                            // 0=chan1, 1=chan2, 2=chan3, 3=chan4, 4=ext, 5=ext5, 6=acl
+    double triggerholdoff;                             // min. is 16nSec or 100nSec depends on series
+    int triggermode;                                   // 0=edge, 1=pulse, 2=slope, 3=video, 4=pattern, 5=rs232,
+                                                       // 6=i2c, 7=spi, 8=can, 9=usb
+    int triggerstatus;                                 // 0=td, 1=wait, 2=run, 3=auto, 4=fin, 5=stop
+    int triggersweep;                                  // 0=auto, 1=normal, 2=single
 
     int displaygrid;    // 0=none, 1=half, 2=full
     int displaytype;    // 0=vectors, 1=dots
@@ -177,28 +295,23 @@ struct DeviceSettings {
     int countersrc;     // 0=off, 1=ch1, 2=ch2, 3=ch3, 4=ch4
     double counterfreq; // Value of frequency counter
 
-    int mathDecodeDisplay;                // 0=off, 1=on
-    int mathDecodeMode;                   // 0=par, 1=uart, 2=spi, 3=iic
-    int mathDecodeFormat;                 // 0=hex, 1=ascii, 2=dec, 3=bin, 4=line
-    int mathDecodePos;                    // vertical position of the decode trace,
-                                          // the screen is divided into 400 parts vertically which
-                                          // are marked as 0 to 400 from top to bottom respectively
-                                          // the range of <pos> is from 50 to 350
-    double mathDecodeThreshold[MAX_CHNS]; // 0: threshold of decode channel 1 (SPI:MISO for modelserie 6)
-                                          // 1: threshold of decode channel 2 (SPI:MOSI for modelserie 6)
-                                          // 2: threshold of decode channel 3 (SPI:SCLK for modelserie 6)
-                                          // 3: threshold of decode channel 4 (SPI:SS for modelserie 6)
-                                          // (-4 x VerticalScale - VerticalOffset) to
-                                          // (4 x VerticalScale - VerticalOffset)
-    double mathDecodeThresholdUartTx;     // threshold of RS232:TX for modelserie 6
-    double mathDecodeThresholdUartRx;     // threshold of RS232:RX for modelserie 6
+    int mathDecodeDisplay; // 0=off, 1=on
+    int mathDecodeMode;    // 0=par, 1=uart, 2=spi, 3=iic
+    int mathDecodeFormat;  // 0=hex, 1=ascii, 2=dec, 3=bin, 4=line
+    int mathDecodePos;     // vertical position of the decode trace,
+                           // the screen is divided into 400 parts vertically which
+                           // are marked as 0 to 400 from top to bottom respectively
+                           // the range of <pos> is from 50 to 350
+
+    double mathDecodeThresholdUartTx; // threshold of RS232:TX for modelserie 6
+    double mathDecodeThresholdUartRx; // threshold of RS232:RX for modelserie 6
 
     int mathDecodeThresholdAuto; // 0=off, 1=on
 
-    int mathDecodeSpiClk;                                // channel - 1
-    int mathDecodeSpiMiso;                               // channel (0=off)
-    int mathDecodeSpiMosi;                               // channel (0=off)
-    int mathDecodeSpiCs;                                 // channel (0=off)
+    CHAN mathDecodeSpiClk;                               // channel - 1
+    CHAN mathDecodeSpiMiso;                              // channel (0=off)
+    CHAN mathDecodeSpiMosi;                              // channel (0=off)
+    CHAN mathDecodeSpiCs;                                // channel (0=off)
     int mathDecodeSpiSelect;                             // select cs level, 0=low, 1=high
     int mathDecodeSpiMode;                               // frame mode, 0=timeout, 1=cs (chip select)
     double mathDecodeSpiTimeout;                         // timeout
@@ -215,8 +328,8 @@ struct DeviceSettings {
     int mathDecodeSpiMisoValPos[DECODE_MAX_CHARS];       // array with position of the decoded characters
     int mathDecodeSpiMisoValPosEnd[DECODE_MAX_CHARS];    // array with endposition of the decoded characters
 
-    int mathDecodeUartTx;                                // channel (0=off)
-    int mathDecodeUartRx;                                // channel (0=off)
+    CHAN mathDecodeUartTx;                               // channel (0=off)
+    CHAN mathDecodeUartRx;                               // channel (0=off)
     int mathDecodeUartPol;                               // polarity, 0=negative, 1=positive
     int mathDecodeUartEnd;                               // endian, 0=lsb, 1=msb
     int mathDecodeUartBaud;                              // baudrate
@@ -233,12 +346,7 @@ struct DeviceSettings {
     int mathDecodeUartRxErr[DECODE_MAX_CHARS];           // array with protocol errors, non zero means an error
 
     char* screenshotBuf;
-    short* waveBuf[MAX_CHNS];
     int waveBufsz;
-    double yinc[MAX_CHNS];
-    int yor[MAX_CHNS];
-
-    double xorigin[MAX_CHNS];
 
     int screenshotInv; // 0=normal, 1=inverted colors
 
@@ -300,4 +408,6 @@ struct DeviceSettings {
     int funcWplayOperate;
     int funcWplayFcur;
     int funcHasRecord;
+
+    LA la;
 };

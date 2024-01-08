@@ -62,7 +62,7 @@ private:
         int connected;
         int modelserie;
         int chanDisplay[MAX_CHNS];
-        double chanscale[MAX_CHNS];
+        double chanScale[MAX_CHNS];
         int triggerstatus;
         int triggersweep;
         double samplerate;

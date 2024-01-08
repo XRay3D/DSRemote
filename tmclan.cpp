@@ -151,11 +151,11 @@ qint64 avg, ctr;
 int TMCLan::tmcLanWrite(struct tmcDev* tmcDevice __attribute__((unused)), std::string_view cmd) {
     if(sockfd == -1) return -1;
 
-    struct name {
-        QElapsedTimer t;
-        name() { t.start(); }
-        ~name() { qCritical("%lld us", (avg += t.nsecsElapsed() / 1000) / ++ctr); }
-    } name;
+    // struct name {
+    //     QElapsedTimer t;
+    //     name() { t.start(); }
+    //     ~name() { qCritical("%lld us", (avg += t.nsecsElapsed() / 1000) / ++ctr); }
+    // } name;
 
     int len = cmd.size();
     if(len > MAX_CMD_LEN) {

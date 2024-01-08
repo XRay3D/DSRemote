@@ -647,16 +647,12 @@ void UiDecoderWindow::spiModeComboboxClicked(int idx) {
     if(devParms->modelSerie == 1) {
         if(idx == 0) {
             mainWindow->setCueCmd(":DEC1:SPI:MODE TIM");
-
             spiCsSrcCombobox->setCurrentIndex(0);
-
-            devParms->mathDecodeSpiCs = 0;
+            devParms->mathDecodeSpiCs = CHAN::OFF;
         } else {
             mainWindow->setCueCmd(":DEC1:SPI:MODE CS");
-
             if(spiCsSrcCombobox->currentIndex() > 0) {
                 snprintf(str, 512, ":DEC1:SPI:CS CHAN%i", spiCsSrcCombobox->currentIndex());
-
                 mainWindow->setCueCmd(str);
             }
         }
@@ -773,33 +769,33 @@ void UiDecoderWindow::threshold1DspinboxChanged() {
 
             mainWindow->setCueCmd(str);
         } else if(uartTxSrcCombobox->currentIndex() > 0) {
-            devParms->mathDecodeThreshold[uartTxSrcCombobox->currentIndex() - 1]
+            devParms->chan[uartTxSrcCombobox->currentIndex() - 1].mathDecodeThreshold
                 = threshold1Dspinbox->value();
 
             snprintf(str,
                 512,
                 ":DEC1:THRE:CHAN%i %e",
                 uartTxSrcCombobox->currentIndex(),
-                devParms->mathDecodeThreshold[uartTxSrcCombobox->currentIndex() - 1]);
+                devParms->chan[uartTxSrcCombobox->currentIndex() - 1].mathDecodeThreshold);
 
             mainWindow->setCueCmd(str);
         }
     } else if(tabHolder->currentIndex() == DECODE_MODE_TAB_SPI) {
         if(devParms->modelSerie != 1) {
-            devParms->mathDecodeThreshold[2] = threshold1Dspinbox->value();
+            devParms->chan[2].mathDecodeThreshold = threshold1Dspinbox->value();
 
-            snprintf(str, 512, ":BUS1:SPI:SCLK:THR %e", devParms->mathDecodeThreshold[2]);
+            snprintf(str, 512, ":BUS1:SPI:SCLK:THR %e", devParms->chan[2].mathDecodeThreshold);
 
             mainWindow->setCueCmd(str);
         } else {
-            devParms->mathDecodeThreshold[spiClkSrcCombobox->currentIndex()]
+            devParms->chan[spiClkSrcCombobox->currentIndex()].mathDecodeThreshold
                 = threshold1Dspinbox->value();
 
             snprintf(str,
                 512,
                 ":DEC1:THRE:CHAN%i %e",
                 spiClkSrcCombobox->currentIndex() + 1,
-                devParms->mathDecodeThreshold[spiClkSrcCombobox->currentIndex()]);
+                devParms->chan[spiClkSrcCombobox->currentIndex()].mathDecodeThreshold);
 
             mainWindow->setCueCmd(str);
         }
@@ -819,33 +815,33 @@ void UiDecoderWindow::threshold2DspinboxChanged() {
 
             mainWindow->setCueCmd(str);
         } else if(uartRxSrcCombobox->currentIndex() > 0) {
-            devParms->mathDecodeThreshold[uartRxSrcCombobox->currentIndex() - 1]
+            devParms->chan[uartRxSrcCombobox->currentIndex() - 1].mathDecodeThreshold
                 = threshold2Dspinbox->value();
 
             snprintf(str,
                 512,
                 ":DEC1:THRE:CHAN%i %e",
                 uartRxSrcCombobox->currentIndex(),
-                devParms->mathDecodeThreshold[uartRxSrcCombobox->currentIndex() - 1]);
+                devParms->chan[uartRxSrcCombobox->currentIndex() - 1].mathDecodeThreshold);
 
             mainWindow->setCueCmd(str);
         }
     } else if(tabHolder->currentIndex() == DECODE_MODE_TAB_SPI) {
         if(devParms->modelSerie != 1) {
-            devParms->mathDecodeThreshold[1] = threshold2Dspinbox->value();
+            devParms->chan[1].mathDecodeThreshold = threshold2Dspinbox->value();
 
-            snprintf(str, 512, ":BUS1:SPI:MOSI:THR %e", devParms->mathDecodeThreshold[1]);
+            snprintf(str, 512, ":BUS1:SPI:MOSI:THR %e", devParms->chan[1].mathDecodeThreshold);
 
             mainWindow->setCueCmd(str);
         } else if(spiMosiSrcCombobox->currentIndex() > 0) {
-            devParms->mathDecodeThreshold[spiMosiSrcCombobox->currentIndex() - 1]
+            devParms->chan[spiMosiSrcCombobox->currentIndex() - 1].mathDecodeThreshold
                 = threshold2Dspinbox->value();
 
             snprintf(str,
                 512,
                 ":DEC1:THRE:CHAN%i %e",
                 spiMosiSrcCombobox->currentIndex(),
-                devParms->mathDecodeThreshold[spiMosiSrcCombobox->currentIndex() - 1]);
+                devParms->chan[spiMosiSrcCombobox->currentIndex() - 1].mathDecodeThreshold);
 
             mainWindow->setCueCmd(str);
         }
@@ -860,20 +856,20 @@ void UiDecoderWindow::threshold3DspinboxChanged() {
     if(tabHolder->currentIndex() == DECODE_MODE_TAB_UART) {
     } else if(tabHolder->currentIndex() == DECODE_MODE_TAB_SPI) {
         if(devParms->modelSerie != 1) {
-            devParms->mathDecodeThreshold[0] = threshold3Dspinbox->value();
+            devParms->chan[0].mathDecodeThreshold = threshold3Dspinbox->value();
 
-            snprintf(str, 512, ":BUS1:SPI:MISO:THR %e", devParms->mathDecodeThreshold[0]);
+            snprintf(str, 512, ":BUS1:SPI:MISO:THR %e", devParms->chan[0].mathDecodeThreshold);
 
             mainWindow->setCueCmd(str);
         } else if(spiMisoSrcCombobox->currentIndex() > 0) {
-            devParms->mathDecodeThreshold[spiMisoSrcCombobox->currentIndex() - 1]
+            devParms->chan[spiMisoSrcCombobox->currentIndex() - 1].mathDecodeThreshold
                 = threshold3Dspinbox->value();
 
             snprintf(str,
                 512,
                 ":DEC1:THRE:CHAN%i %e",
                 spiMisoSrcCombobox->currentIndex(),
-                devParms->mathDecodeThreshold[spiMisoSrcCombobox->currentIndex() - 1]);
+                devParms->chan[spiMisoSrcCombobox->currentIndex() - 1].mathDecodeThreshold);
 
             mainWindow->setCueCmd(str);
         }
@@ -888,20 +884,20 @@ void UiDecoderWindow::threshold4DspinboxChanged() {
     if(tabHolder->currentIndex() == DECODE_MODE_TAB_UART) {
     } else if(tabHolder->currentIndex() == DECODE_MODE_TAB_SPI) {
         if(devParms->modelSerie != 1) {
-            devParms->mathDecodeThreshold[3] = threshold4Dspinbox->value();
+            devParms->chan[3].mathDecodeThreshold = threshold4Dspinbox->value();
 
-            snprintf(str, 512, ":BUS1:SPI:SS:THR %e", devParms->mathDecodeThreshold[3]);
+            snprintf(str, 512, ":BUS1:SPI:SS:THR %e", devParms->chan[3].mathDecodeThreshold);
 
             mainWindow->setCueCmd(str);
         } else if(spiCsSrcCombobox->currentIndex() > 0) {
-            devParms->mathDecodeThreshold[spiCsSrcCombobox->currentIndex() - 1]
+            devParms->chan[spiCsSrcCombobox->currentIndex() - 1].mathDecodeThreshold
                 = threshold4Dspinbox->value();
 
             snprintf(str,
                 512,
                 ":DEC1:THRE:CHAN%i %e",
                 spiCsSrcCombobox->currentIndex(),
-                devParms->mathDecodeThreshold[spiCsSrcCombobox->currentIndex() - 1]);
+                devParms->chan[spiCsSrcCombobox->currentIndex() - 1].mathDecodeThreshold);
 
             mainWindow->setCueCmd(str);
         }
@@ -911,12 +907,12 @@ void UiDecoderWindow::threshold4DspinboxChanged() {
 }
 
 void UiDecoderWindow::srcComboboxClicked(int) {
-    devParms->mathDecodeSpiClk = spiClkSrcCombobox->currentIndex();
-    devParms->mathDecodeSpiMosi = spiMosiSrcCombobox->currentIndex();
-    devParms->mathDecodeSpiMiso = spiMisoSrcCombobox->currentIndex();
-    devParms->mathDecodeSpiCs = spiCsSrcCombobox->currentIndex();
-    devParms->mathDecodeUartTx = uartTxSrcCombobox->currentIndex();
-    devParms->mathDecodeUartRx = uartRxSrcCombobox->currentIndex();
+    devParms->mathDecodeSpiClk = CHAN(spiClkSrcCombobox->currentIndex());
+    devParms->mathDecodeSpiMosi = CHAN(spiMosiSrcCombobox->currentIndex());
+    devParms->mathDecodeSpiMiso = CHAN(spiMisoSrcCombobox->currentIndex());
+    devParms->mathDecodeSpiCs = CHAN(spiCsSrcCombobox->currentIndex());
+    devParms->mathDecodeUartTx = CHAN(uartTxSrcCombobox->currentIndex());
+    devParms->mathDecodeUartRx = CHAN(uartRxSrcCombobox->currentIndex());
     devParms->mathDecodeSpiMode = spiModeCombobox->currentIndex();
     devParms->mathDecodeSpiSelect = spiSelectCombobox->currentIndex();
 
@@ -979,9 +975,9 @@ void UiDecoderWindow::thresholdAutoClicked(int thrAuto) {
                 threshold2Dspinbox->setValue(devParms->mathDecodeThresholdUartRx);
             } else {
                 threshold1Dspinbox->setValue(
-                    devParms->mathDecodeThreshold[uartTxSrcCombobox->currentIndex() - 1]);
+                    devParms->chan[uartTxSrcCombobox->currentIndex() - 1].mathDecodeThreshold);
                 threshold2Dspinbox->setValue(
-                    devParms->mathDecodeThreshold[uartRxSrcCombobox->currentIndex() - 1]);
+                    devParms->chan[uartRxSrcCombobox->currentIndex() - 1].mathDecodeThreshold);
             }
         } else {
             threshold1Dspinbox->setValue(0.0);
@@ -1095,19 +1091,19 @@ void UiDecoderWindow::thresholdAutoClicked(int thrAuto) {
             threshold4Dspinbox->setEnabled(true);
 
             if(devParms->modelSerie != 1) {
-                threshold1Dspinbox->setValue(devParms->mathDecodeThreshold[2]);
-                threshold2Dspinbox->setValue(devParms->mathDecodeThreshold[1]);
-                threshold3Dspinbox->setValue(devParms->mathDecodeThreshold[0]);
-                threshold4Dspinbox->setValue(devParms->mathDecodeThreshold[3]);
+                threshold1Dspinbox->setValue(devParms->chan[2].mathDecodeThreshold);
+                threshold2Dspinbox->setValue(devParms->chan[1].mathDecodeThreshold);
+                threshold3Dspinbox->setValue(devParms->chan[0].mathDecodeThreshold);
+                threshold4Dspinbox->setValue(devParms->chan[3].mathDecodeThreshold);
             } else {
                 threshold1Dspinbox->setValue(
-                    devParms->mathDecodeThreshold[spiClkSrcCombobox->currentIndex()]);
+                    devParms->chan[spiClkSrcCombobox->currentIndex()].mathDecodeThreshold);
                 threshold2Dspinbox->setValue(
-                    devParms->mathDecodeThreshold[spiMosiSrcCombobox->currentIndex() - 1]);
+                    devParms->chan[spiMosiSrcCombobox->currentIndex() - 1].mathDecodeThreshold);
                 threshold3Dspinbox->setValue(
-                    devParms->mathDecodeThreshold[spiMisoSrcCombobox->currentIndex() - 1]);
+                    devParms->chan[spiMisoSrcCombobox->currentIndex() - 1].mathDecodeThreshold);
                 threshold4Dspinbox->setValue(
-                    devParms->mathDecodeThreshold[spiCsSrcCombobox->currentIndex() - 1]);
+                    devParms->chan[spiCsSrcCombobox->currentIndex() - 1].mathDecodeThreshold);
             }
         } else {
             threshold1Dspinbox->setValue(0.0);

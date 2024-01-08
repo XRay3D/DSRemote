@@ -80,7 +80,7 @@ void UiMainWindow::serialDecoder(struct DeviceSettings* d_parms) {
 
     if(d_parms->mathDecodeThresholdAuto) {
         for(j = 0; j < MAX_CHNS; j++) {
-            if(!d_parms->chanDisplay[j])
+            if(!d_parms->chan[j].Display)
                 continue;
 
             s_max = -32768;
@@ -98,106 +98,106 @@ void UiMainWindow::serialDecoder(struct DeviceSettings* d_parms) {
     } else if(d_parms->mathDecodeMode == DECODE_MODE_UART) {
         if(d_parms->mathDecodeUartTx) {
             if(d_parms->modelSerie == 6) {
-                bit_per_volt = 32.0 / d_parms->chanscale[d_parms->mathDecodeUartTx - 1];
+                bit_per_volt = 32.0 / d_parms->chan[d_parms->mathDecodeUartTx - 1].scale;
 
                 threshold[d_parms->mathDecodeUartTx - 1]
                     = (d_parms->mathDecodeThresholdUartTx
-                          + d_parms->chanoffset[d_parms->mathDecodeUartTx - 1])
+                          + d_parms->chan[d_parms->mathDecodeUartTx - 1].offset)
                     * bit_per_volt;
             } else {
-                bit_per_volt = 25.0 / d_parms->chanscale[d_parms->mathDecodeUartTx - 1];
+                bit_per_volt = 25.0 / d_parms->chan[d_parms->mathDecodeUartTx - 1].scale;
 
                 threshold[d_parms->mathDecodeUartTx - 1]
-                    = (d_parms->mathDecodeThreshold[d_parms->mathDecodeUartTx - 1]
-                          + d_parms->chanoffset[d_parms->mathDecodeUartTx - 1])
+                    = (d_parms->chan[d_parms->mathDecodeUartTx - 1].mathDecodeThreshold
+                          + d_parms->chan[d_parms->mathDecodeUartTx - 1].offset)
                     * bit_per_volt;
             }
         }
 
         if(d_parms->mathDecodeUartRx) {
             if(d_parms->modelSerie == 6) {
-                bit_per_volt = 32.0 / d_parms->chanscale[d_parms->mathDecodeUartRx - 1];
+                bit_per_volt = 32.0 / d_parms->chan[d_parms->mathDecodeUartRx - 1].scale;
 
                 threshold[d_parms->mathDecodeUartRx - 1]
                     = (d_parms->mathDecodeThresholdUartRx
-                          + d_parms->chanoffset[d_parms->mathDecodeUartRx - 1])
+                          + d_parms->chan[d_parms->mathDecodeUartRx - 1].offset)
                     * bit_per_volt;
             } else {
-                bit_per_volt = 25.0 / d_parms->chanscale[d_parms->mathDecodeUartRx - 1];
+                bit_per_volt = 25.0 / d_parms->chan[d_parms->mathDecodeUartRx - 1].scale;
 
                 threshold[d_parms->mathDecodeUartRx - 1]
-                    = (d_parms->mathDecodeThreshold[d_parms->mathDecodeUartRx - 1]
-                          + d_parms->chanoffset[d_parms->mathDecodeUartRx - 1])
+                    = (d_parms->chan[d_parms->mathDecodeUartRx - 1].mathDecodeThreshold
+                          + d_parms->chan[d_parms->mathDecodeUartRx - 1].offset)
                     * bit_per_volt;
             }
         }
     } else if(d_parms->mathDecodeMode == DECODE_MODE_SPI) {
         if(d_parms->modelSerie == 6) {
-            bit_per_volt = 32.0 / d_parms->chanscale[d_parms->mathDecodeSpiClk];
+            bit_per_volt = 32.0 / d_parms->chan[d_parms->mathDecodeSpiClk].scale;
 
             threshold[d_parms->mathDecodeSpiClk]
-                = (d_parms->mathDecodeThreshold[2]
-                      + d_parms->chanoffset[d_parms->mathDecodeSpiClk])
+                = (d_parms->chan[2].mathDecodeThreshold
+                      + d_parms->chan[d_parms->mathDecodeSpiClk].offset)
                 * bit_per_volt;
         } else {
-            bit_per_volt = 25.0 / d_parms->chanscale[d_parms->mathDecodeSpiClk];
+            bit_per_volt = 25.0 / d_parms->chan[d_parms->mathDecodeSpiClk].scale;
 
             threshold[d_parms->mathDecodeSpiClk]
-                = (d_parms->mathDecodeThreshold[d_parms->mathDecodeSpiClk]
-                      + d_parms->chanoffset[d_parms->mathDecodeSpiClk])
+                = (d_parms->chan[d_parms->mathDecodeSpiClk].mathDecodeThreshold
+                      + d_parms->chan[d_parms->mathDecodeSpiClk].offset)
                 * bit_per_volt;
         }
 
         if(d_parms->mathDecodeSpiMosi) {
             if(d_parms->modelSerie == 6) {
-                bit_per_volt = 32.0 / d_parms->chanscale[d_parms->mathDecodeSpiMosi - 1];
+                bit_per_volt = 32.0 / d_parms->chan[d_parms->mathDecodeSpiMosi - 1].scale;
 
                 threshold[d_parms->mathDecodeSpiMosi - 1]
-                    = (d_parms->mathDecodeThreshold[1]
-                          + d_parms->chanoffset[d_parms->mathDecodeSpiMosi - 1])
+                    = (d_parms->chan[1].mathDecodeThreshold
+                          + d_parms->chan[d_parms->mathDecodeSpiMosi - 1].offset)
                     * bit_per_volt;
             } else {
-                bit_per_volt = 25.0 / d_parms->chanscale[d_parms->mathDecodeSpiMosi - 1];
+                bit_per_volt = 25.0 / d_parms->chan[d_parms->mathDecodeSpiMosi - 1].scale;
 
                 threshold[d_parms->mathDecodeSpiMosi - 1]
-                    = (d_parms->mathDecodeThreshold[d_parms->mathDecodeSpiMosi - 1]
-                          + d_parms->chanoffset[d_parms->mathDecodeSpiMosi - 1])
+                    = (d_parms->chan[d_parms->mathDecodeSpiMosi - 1].mathDecodeThreshold
+                          + d_parms->chan[d_parms->mathDecodeSpiMosi - 1].offset)
                     * bit_per_volt;
             }
         }
 
         if(d_parms->mathDecodeSpiMiso) {
             if(d_parms->modelSerie == 6) {
-                bit_per_volt = 32.0 / d_parms->chanscale[d_parms->mathDecodeSpiMiso - 1];
+                bit_per_volt = 32.0 / d_parms->chan[d_parms->mathDecodeSpiMiso - 1].scale;
 
                 threshold[d_parms->mathDecodeSpiMiso - 1]
-                    = (d_parms->mathDecodeThreshold[0]
-                          + d_parms->chanoffset[d_parms->mathDecodeSpiMiso - 1])
+                    = (d_parms->chan[0].mathDecodeThreshold
+                          + d_parms->chan[d_parms->mathDecodeSpiMiso - 1].offset)
                     * bit_per_volt;
             } else {
-                bit_per_volt = 25.0 / d_parms->chanscale[d_parms->mathDecodeSpiMiso - 1];
+                bit_per_volt = 25.0 / d_parms->chan[d_parms->mathDecodeSpiMiso - 1].scale;
 
                 threshold[d_parms->mathDecodeSpiMiso - 1]
-                    = (d_parms->mathDecodeThreshold[d_parms->mathDecodeSpiMiso - 1]
-                          + d_parms->chanoffset[d_parms->mathDecodeSpiMiso - 1])
+                    = (d_parms->chan[d_parms->mathDecodeSpiMiso - 1].mathDecodeThreshold
+                          + d_parms->chan[d_parms->mathDecodeSpiMiso - 1].offset)
                     * bit_per_volt;
             }
         }
 
         if(d_parms->mathDecodeSpiCs) {
             if(d_parms->modelSerie == 6) {
-                bit_per_volt = 32.0 / d_parms->chanscale[d_parms->mathDecodeSpiCs - 1];
+                bit_per_volt = 32.0 / d_parms->chan[d_parms->mathDecodeSpiCs - 1].scale;
 
                 threshold[d_parms->mathDecodeSpiCs - 1]
-                    = (d_parms->mathDecodeThreshold[3]
-                          + d_parms->chanoffset[d_parms->mathDecodeSpiCs - 1])
+                    = (d_parms->chan[3].mathDecodeThreshold
+                          + d_parms->chan[d_parms->mathDecodeSpiCs - 1].offset)
                     * bit_per_volt;
             } else {
-                bit_per_volt = 25.0 / d_parms->chanscale[d_parms->mathDecodeSpiCs - 1];
+                bit_per_volt = 25.0 / d_parms->chan[d_parms->mathDecodeSpiCs - 1].scale;
 
                 threshold[d_parms->mathDecodeSpiCs - 1]
-                    = (d_parms->mathDecodeThreshold[d_parms->mathDecodeSpiCs - 1]
-                          + d_parms->chanoffset[d_parms->mathDecodeSpiCs - 1])
+                    = (d_parms->chan[d_parms->mathDecodeSpiCs - 1].mathDecodeThreshold
+                          + d_parms->chan[d_parms->mathDecodeSpiCs - 1].offset)
                     * bit_per_volt;
             }
         }
@@ -241,8 +241,8 @@ void UiMainWindow::serialDecoder(struct DeviceSettings* d_parms) {
         //             "threshold: %i\n"
         //             "uart_sample_per_bit: %f\n"
         //             "waveBufsz: %i\n",
-        //             d_parms->chanscale[d_parms->math_decode_uart_tx - 1],
-        //             d_parms->chanoffset[d_parms->math_decode_uart_tx - 1],
+        //             d_parms->chan[d_parms->math_decode_uart_tx - 1].scale,
+        //             d_parms->chan[d_parms->math_decode_uart_tx - 1].offset,
         //             d_parms->math_decode_threshold_uart_tx,
         //             d_parms->math_decode_uart_tx,
         //             threshold[d_parms->math_decode_uart_tx - 1],
@@ -259,8 +259,8 @@ void UiMainWindow::serialDecoder(struct DeviceSettings* d_parms) {
         //             "threshold: %i\n"
         //             "uart_sample_per_bit: %f\n"
         //             "waveBufsz: %i\n",
-        //             d_parms->chanscale[d_parms->math_decode_uart_tx - 1],
-        //             d_parms->chanoffset[d_parms->math_decode_uart_tx - 1],
+        //             d_parms->chan[d_parms->math_decode_uart_tx - 1].scale,
+        //             d_parms->chan[d_parms->math_decode_uart_tx - 1].offset,
         //             d_parms->math_decode_threshold[d_parms->math_decode_uart_tx - 1],
         //             d_parms->math_decode_uart_tx,
         //             threshold[d_parms->math_decode_uart_tx - 1],
@@ -269,8 +269,7 @@ void UiMainWindow::serialDecoder(struct DeviceSettings* d_parms) {
         //     }
 
         if(d_parms->mathDecodeUartTx) {
-            if(d_parms->chanDisplay[d_parms->mathDecodeUartTx
-                   - 1]) // don't try to decode if channel isn't enabled...
+            if(d_parms->chan[d_parms->mathDecodeUartTx - 1].Display) // don't try to decode if channel isn't enabled...
             {
                 for(i = 1; i < d_parms->waveBufsz; i++) {
                     if(d_parms->mathDecodeUartTxNval >= DECODE_MAX_CHARS)
@@ -473,8 +472,8 @@ void UiMainWindow::serialDecoder(struct DeviceSettings* d_parms) {
         }
 
         if(d_parms->mathDecodeUartRx) {
-            if(d_parms->chanDisplay[d_parms->mathDecodeUartRx
-                   - 1]) // don't try to decode if channel isn't enabled...
+            if(d_parms->chan[d_parms->mathDecodeUartRx - 1]
+                    .Display) // don't try to decode if channel isn't enabled...
             {
                 for(i = 1; i < d_parms->waveBufsz; i++) {
                     if(d_parms->mathDecodeUartRxNval >= DECODE_MAX_CHARS)
@@ -706,14 +705,14 @@ void UiMainWindow::serialDecoder(struct DeviceSettings* d_parms) {
         else
             spi_clk_old = 0;
 
-        if(!d_parms->chanDisplay[d_parms->mathDecodeSpiClk]) // without a clock we can't do much...
+        if(!d_parms->chan[d_parms->mathDecodeSpiClk].Display) // without a clock we can't do much...
             goto SPI_DECODE_OUT;
 
         if(d_parms->mathDecodeSpiMode) // use chip select line?
         {
             if(d_parms->mathDecodeSpiCs) // is chip select channel selected?
             {
-                if(!d_parms->chanDisplay[d_parms->mathDecodeSpiCs]) // is selected channel for CS enabled?
+                if(!d_parms->chan[d_parms->mathDecodeSpiCs].Display) // is selected channel for CS enabled?
                     goto SPI_DECODE_OUT;
             } else {
                 goto SPI_DECODE_OUT;
@@ -794,8 +793,8 @@ void UiMainWindow::serialDecoder(struct DeviceSettings* d_parms) {
             spi_clk_old = spi_clk_new;
 
             if(d_parms->mathDecodeSpiMosi) {
-                if(d_parms->chanDisplay[d_parms->mathDecodeSpiMosi
-                       - 1]) // don't try to decode if channel isn't enabled...
+                if(d_parms->chan[d_parms->mathDecodeSpiMosi - 1]
+                        .Display) // don't try to decode if channel isn't enabled...
                 {
                     if(d_parms->waveBuf[d_parms->mathDecodeSpiMosi - 1][i]
                         >= threshold[d_parms->mathDecodeSpiMosi - 1])
@@ -847,8 +846,8 @@ void UiMainWindow::serialDecoder(struct DeviceSettings* d_parms) {
             }
 
             if(d_parms->mathDecodeSpiMiso) {
-                if(d_parms->chanDisplay[d_parms->mathDecodeSpiMiso
-                       - 1]) // don't try to decode if channel isn't enabled...
+                if(d_parms->chan[d_parms->mathDecodeSpiMiso - 1]
+                        .Display) // don't try to decode if channel isn't enabled...
                 {
                     if(d_parms->waveBuf[d_parms->mathDecodeSpiMiso - 1][i]
                         >= threshold[d_parms->mathDecodeSpiMiso - 1])

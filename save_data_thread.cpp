@@ -100,7 +100,7 @@ void SaveDataThread::save_memory_edf_file(void) {
 
     for(int i{}; i < datrecs; i++) {
         for(int chn{}; chn < MAX_CHNS; chn++) {
-            if(!devParms->chanDisplay[chn])
+            if(!devParms->chan[chn].Display)
                 continue;
 
             if(edfwrite_digital_short_samples(hdl, wavBuf[chn] + (i * smps_per_record))) {

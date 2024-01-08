@@ -568,7 +568,7 @@ int UiMainWindow::getDeviceSettings(int delay) {
     }
 
     for(int chn{}; chn < /*devParms.channelCnt*/ 4; chn++) // FIXME
-        if(devParms.chanDisplay[chn] == 1)
+        if(devParms.chan[chn].Display == 1)
             chButtons.at(chn)->setStyleSheet(std::array{
                 "background: #FFFF33; color: black;",
                 "background: #33FFFF; color: black;",
@@ -698,237 +698,159 @@ void UiMainWindow::getDeviceModel(const char* str) {
         devParms.channelCnt = 4;
         devParms.bandwidth = 1000;
         devParms.modelSerie = 6;
-    }
-
-    if(!strcmp(str, "DS6064")) {
+    } else if(!strcmp(str, "DS6064")) {
         devParms.channelCnt = 4;
         devParms.bandwidth = 600;
         devParms.modelSerie = 6;
-    }
-
-    if(!strcmp(str, "DS6102")) {
+    } else if(!strcmp(str, "DS6102")) {
         devParms.channelCnt = 2;
         devParms.bandwidth = 1000;
         devParms.modelSerie = 6;
-    }
-
-    if(!strcmp(str, "DS6062")) {
+    } else if(!strcmp(str, "DS6062")) {
         devParms.channelCnt = 2;
         devParms.bandwidth = 600;
         devParms.modelSerie = 6;
-    }
-
-    if(!strcmp(str, "DS4012")) {
+    } else if(!strcmp(str, "DS4012")) {
         devParms.channelCnt = 2;
         devParms.bandwidth = 100;
         devParms.modelSerie = 4;
-    }
-
-    if(!strcmp(str, "DS4014")) {
+    } else if(!strcmp(str, "DS4014")) {
         devParms.channelCnt = 4;
         devParms.bandwidth = 100;
         devParms.modelSerie = 4;
-    }
-
-    if(!strcmp(str, "DS4022")) {
+    } else if(!strcmp(str, "DS4022")) {
         devParms.channelCnt = 2;
         devParms.bandwidth = 200;
         devParms.modelSerie = 4;
-    }
-
-    if(!strcmp(str, "DS4024")) {
+    } else if(!strcmp(str, "DS4024")) {
         devParms.channelCnt = 4;
         devParms.bandwidth = 200;
         devParms.modelSerie = 4;
-    }
-
-    if(!strcmp(str, "DS4032")) {
+    } else if(!strcmp(str, "DS4032")) {
         devParms.channelCnt = 2;
         devParms.bandwidth = 350;
         devParms.modelSerie = 4;
-    }
-
-    if(!strcmp(str, "DS4034")) {
+    } else if(!strcmp(str, "DS4034")) {
         devParms.channelCnt = 4;
         devParms.bandwidth = 350;
         devParms.modelSerie = 4;
-    }
-
-    if(!strcmp(str, "DS4052")) {
+    } else if(!strcmp(str, "DS4052")) {
         devParms.channelCnt = 2;
         devParms.bandwidth = 500;
         devParms.modelSerie = 4;
-    }
-
-    if(!strcmp(str, "DS4054")) {
+    } else if(!strcmp(str, "DS4054")) {
         devParms.channelCnt = 4;
         devParms.bandwidth = 500;
         devParms.modelSerie = 4;
-    }
-
-    if(!strcmp(str, "MSO4012")) {
+    } else if(!strcmp(str, "MSO4012")) {
         devParms.channelCnt = 2;
         devParms.bandwidth = 100;
         devParms.modelSerie = 4;
-    }
-
-    if(!strcmp(str, "MSO4024")) {
+    } else if(!strcmp(str, "MSO4024")) {
         devParms.channelCnt = 4;
         devParms.bandwidth = 200;
         devParms.modelSerie = 4;
-    }
-
-    if(!strcmp(str, "DS2072A")) {
+    } else if(!strcmp(str, "DS2072A")) {
         devParms.channelCnt = 2;
         devParms.bandwidth = 70;
         devParms.modelSerie = 2;
-    }
-
-    if(!strcmp(str, "DS2072A-S")) {
+    } else if(!strcmp(str, "DS2072A-S")) {
         devParms.channelCnt = 2;
         devParms.bandwidth = 70;
         devParms.modelSerie = 2;
-    }
-
-    if(!strcmp(str, "DS2102")) {
+    } else if(!strcmp(str, "DS2102")) {
         devParms.channelCnt = 2;
         devParms.bandwidth = 100;
         devParms.modelSerie = 2;
-    }
-
-    if(!strcmp(str, "DS2102A")) {
+    } else if(!strcmp(str, "DS2102A")) {
         devParms.channelCnt = 2;
         devParms.bandwidth = 100;
         devParms.modelSerie = 2;
-    }
-
-    if(!strcmp(str, "DS2102A-S")) {
+    } else if(!strcmp(str, "DS2102A-S")) {
         devParms.channelCnt = 2;
         devParms.bandwidth = 100;
         devParms.modelSerie = 2;
-    }
-
-    if(!strcmp(str, "DS2202")) {
+    } else if(!strcmp(str, "DS2202")) {
         devParms.channelCnt = 2;
         devParms.bandwidth = 200;
         devParms.modelSerie = 2;
-    }
-
-    if(!strcmp(str, "DS2202A")) {
+    } else if(!strcmp(str, "DS2202A")) {
         devParms.channelCnt = 2;
         devParms.bandwidth = 200;
         devParms.modelSerie = 2;
-    }
-
-    if(!strcmp(str, "DS2202A-S")) {
+    } else if(!strcmp(str, "DS2202A-S")) {
         devParms.channelCnt = 2;
         devParms.bandwidth = 200;
         devParms.modelSerie = 2;
-    }
-
-    if(!strcmp(str, "DS2302")) {
+    } else if(!strcmp(str, "DS2302")) {
         devParms.channelCnt = 2;
         devParms.bandwidth = 300;
         devParms.modelSerie = 2;
-    }
-
-    if(!strcmp(str, "DS2302A")) {
+    } else if(!strcmp(str, "DS2302A")) {
         devParms.channelCnt = 2;
         devParms.bandwidth = 300;
         devParms.modelSerie = 2;
-    }
-
-    if(!strcmp(str, "DS2302A-S")) {
+    } else if(!strcmp(str, "DS2302A-S")) {
         devParms.channelCnt = 2;
         devParms.bandwidth = 300;
         devParms.modelSerie = 2;
-    }
-
-    if(!strcmp(str, "DS1054Z")) {
+    } else if(!strcmp(str, "DS1054Z")) {
         devParms.channelCnt = 4;
         devParms.bandwidth = 50;
         devParms.modelSerie = 1;
-    }
-
-    if(!strcmp(str, "DS1074Z")) {
+    } else if(!strcmp(str, "DS1074Z")) {
         devParms.channelCnt = 4;
         devParms.bandwidth = 70;
         devParms.modelSerie = 1;
-    }
-
-    if(!strcmp(str, "DS1074Z-S")) {
+    } else if(!strcmp(str, "DS1074Z-S")) {
         devParms.channelCnt = 4;
         devParms.bandwidth = 70;
         devParms.modelSerie = 1;
-    }
-
-    if(!strcmp(str, "DS1074Z Plus")) {
+    } else if(!strcmp(str, "DS1074Z Plus")) {
         devParms.channelCnt = 4;
         devParms.bandwidth = 70;
         devParms.modelSerie = 1;
-    }
-
-    if(!strcmp(str, "DS1074Z-S Plus")) {
+    } else if(!strcmp(str, "DS1074Z-S Plus")) {
         devParms.channelCnt = 4;
         devParms.bandwidth = 70;
         devParms.modelSerie = 1;
-    }
-
-    if(!strcmp(str, "DS1104Z")) {
+    } else if(!strcmp(str, "DS1104Z")) {
         devParms.channelCnt = 4;
         devParms.bandwidth = 100;
         devParms.modelSerie = 1;
-    }
-
-    if(!strcmp(str, "DS1104Z-S")) {
+    } else if(!strcmp(str, "DS1104Z-S")) {
         devParms.channelCnt = 4;
         devParms.bandwidth = 100;
         devParms.modelSerie = 1;
-    }
-
-    if(!strcmp(str, "DS1104Z Plus")) {
-        devParms.channelCnt = 4 + 16;
-        devParms.bandwidth = 100;
-        devParms.modelSerie = 1;
-    }
-
-    if(!strcmp(str, "DS1104Z-S Plus")) {
+    } else if(!strcmp(str, "DS1104Z Plus")) { // FIXME
         devParms.channelCnt = 4;
         devParms.bandwidth = 100;
         devParms.modelSerie = 1;
-    }
-
-    if(!strcmp(str, "MSO1074Z")) {
+    } else if(!strcmp(str, "DS1104Z-S Plus")) {
+        devParms.channelCnt = 4;
+        devParms.bandwidth = 100;
+        devParms.modelSerie = 1;
+    } else if(!strcmp(str, "MSO1074Z")) {
         devParms.channelCnt = 4;
         devParms.bandwidth = 70;
         devParms.modelSerie = 1;
-    }
-
-    if(!strcmp(str, "MSO1104Z")) {
+    } else if(!strcmp(str, "MSO1104Z")) {
         devParms.channelCnt = 4;
         devParms.bandwidth = 100;
         devParms.modelSerie = 1;
-    }
-
-    if(!strcmp(str, "MSO1074Z-S")) {
+    } else if(!strcmp(str, "MSO1074Z-S")) {
         devParms.channelCnt = 4;
         devParms.bandwidth = 70;
         devParms.modelSerie = 1;
-    }
-
-    if(!strcmp(str, "MSO1104Z-S")) {
+    } else if(!strcmp(str, "MSO1104Z-S")) {
         devParms.channelCnt = 4;
         devParms.bandwidth = 100;
         devParms.modelSerie = 1;
-    }
-
-    if(!strcmp(str, "DS1202Z-E")) {
+    } else if(!strcmp(str, "DS1202Z-E")) {
         devParms.channelCnt = 2;
         devParms.bandwidth = 200;
         devParms.modelSerie = 1;
-    }
-
-    if(!strcmp(str, "DS1102Z-E")) {
+    } else if(!strcmp(str, "DS1102Z-E")) {
         devParms.channelCnt = 2;
         devParms.bandwidth = 100;
         devParms.modelSerie = 1;
@@ -1402,7 +1324,7 @@ void UiMainWindow::chanScalePlus() {
                 snprintf(str,
                     512,
                     ":CALC:FFT:VSC %e",
-                    devParms.fftVScale / devParms.chanscale[devParms.mathFftSrc]);
+                    devParms.fftVScale / devParms.chan[devParms.mathFftSrc].scale);
                 setCueCmd(str);
             }
         } else {
@@ -1424,27 +1346,27 @@ void UiMainWindow::chanScalePlus() {
     }
 
     chn = devParms.activechannel;
-    if(devParms.chanscale[chn] >= 20) {
-        devParms.chanscale[chn] = 20;
+    if(devParms.chan[chn].scale >= 20) {
+        devParms.chan[chn].scale = 20;
         return;
     }
 
-    ltmp = devParms.chanscale[chn];
-    val = roundUpStep125(devParms.chanscale[chn], nullptr);
-    if(devParms.chanvernier[chn]) {
+    ltmp = devParms.chan[chn].scale;
+    val = roundUpStep125(devParms.chan[chn].scale, nullptr);
+    if(devParms.chan[chn].vernier) {
         val /= 100;
-        devParms.chanscale[chn] += val;
+        devParms.chan[chn].scale += val;
     } else {
-        devParms.chanscale[chn] = val;
+        devParms.chan[chn].scale = val;
     }
 
     ltmp /= val;
-    devParms.chanoffset[chn] /= ltmp;
+    devParms.chan[chn].offset /= ltmp;
     snprintf(str, 512, "Channel %i scale: ", chn + 1);
-    convertToMetricSuffix(str + strlen(str), devParms.chanscale[chn], 2, 512 - strlen(str));
+    convertToMetricSuffix(str + strlen(str), devParms.chan[chn].scale, 2, 512 - strlen(str));
     strlcat(str, "V", 512);
     statusLabel->setText(str);
-    snprintf(str, 512, ":CHAN%i:SCAL %e", chn + 1, devParms.chanscale[chn]);
+    snprintf(str, 512, ":CHAN%i:SCAL %e", chn + 1, devParms.chan[chn].scale);
     setCueCmd(str);
     waveForm->update();
 }
@@ -1462,29 +1384,29 @@ void UiMainWindow::chanScalePlusAll() {
     if(devParms.mathFft && devParms.mathFftSplit)
         return;
     for(chn = 0; chn < devParms.channelCnt; chn++) {
-        if(!devParms.chanDisplay[chn])
+        if(!devParms.chan[chn].Display)
             continue;
-        if(devParms.chanscale[chn] >= 20) {
-            devParms.chanscale[chn] = 20;
+        if(devParms.chan[chn].scale >= 20) {
+            devParms.chan[chn].scale = 20;
             return;
         }
 
-        ltmp = devParms.chanscale[chn];
-        val = roundUpStep125(devParms.chanscale[chn], nullptr);
-        if(devParms.chanvernier[chn]) {
+        ltmp = devParms.chan[chn].scale;
+        val = roundUpStep125(devParms.chan[chn].scale, nullptr);
+        if(devParms.chan[chn].vernier) {
             val /= 100;
-            devParms.chanscale[chn] += val;
+            devParms.chan[chn].scale += val;
         } else {
-            devParms.chanscale[chn] = val;
+            devParms.chan[chn].scale = val;
         }
 
         ltmp /= val;
-        devParms.chanoffset[chn] /= ltmp;
+        devParms.chan[chn].offset /= ltmp;
         snprintf(str, 512, "Channel %i scale: ", chn + 1);
-        convertToMetricSuffix(str + strlen(str), devParms.chanscale[chn], 2, 512 - strlen(str));
+        convertToMetricSuffix(str + strlen(str), devParms.chan[chn].scale, 2, 512 - strlen(str));
         strlcat(str, "V", 512);
         statusLabel->setText(str);
-        snprintf(str, 512, ":CHAN%i:SCAL %e", chn + 1, devParms.chanscale[chn]);
+        snprintf(str, 512, ":CHAN%i:SCAL %e", chn + 1, devParms.chan[chn].scale);
         setCueCmd(str);
     }
 
@@ -1523,7 +1445,7 @@ void UiMainWindow::chanScaleMinus() {
                 snprintf(str,
                     512,
                     ":CALC:FFT:VSC %e",
-                    devParms.fftVScale / devParms.chanscale[devParms.mathFftSrc]);
+                    devParms.fftVScale / devParms.chan[devParms.mathFftSrc].scale);
                 setCueCmd(str);
             }
         } else {
@@ -1545,30 +1467,30 @@ void UiMainWindow::chanScaleMinus() {
     }
 
     chn = devParms.activechannel;
-    if(devParms.chanscale[chn] <= 1e-2) {
-        devParms.chanscale[chn] = 1e-2;
+    if(devParms.chan[chn].scale <= 1e-2) {
+        devParms.chan[chn].scale = 1e-2;
         return;
     }
 
-    ltmp = devParms.chanscale[chn];
-    if(devParms.chanvernier[chn])
-        val = roundUpStep125(devParms.chanscale[chn], nullptr);
+    ltmp = devParms.chan[chn].scale;
+    if(devParms.chan[chn].vernier)
+        val = roundUpStep125(devParms.chan[chn].scale, nullptr);
     else
-        val = roundDownStep125(devParms.chanscale[chn], nullptr);
-    if(devParms.chanvernier[chn]) {
+        val = roundDownStep125(devParms.chan[chn].scale, nullptr);
+    if(devParms.chan[chn].vernier) {
         val /= 100;
-        devParms.chanscale[chn] -= val;
+        devParms.chan[chn].scale -= val;
     } else {
-        devParms.chanscale[chn] = val;
+        devParms.chan[chn].scale = val;
     }
 
     ltmp /= val;
-    devParms.chanoffset[chn] /= ltmp;
+    devParms.chan[chn].offset /= ltmp;
     snprintf(str, 512, "Channel %i scale: ", chn + 1);
-    convertToMetricSuffix(str + strlen(str), devParms.chanscale[chn], 2, 512 - strlen(str));
+    convertToMetricSuffix(str + strlen(str), devParms.chan[chn].scale, 2, 512 - strlen(str));
     strlcat(str, "V", 512);
     statusLabel->setText(str);
-    snprintf(str, 512, ":CHAN%i:SCAL %e", chn + 1, devParms.chanscale[chn]);
+    snprintf(str, 512, ":CHAN%i:SCAL %e", chn + 1, devParms.chan[chn].scale);
     setCueCmd(str);
     waveForm->update();
 }
@@ -1586,32 +1508,32 @@ void UiMainWindow::chanScaleMinusAll() {
     if(devParms.mathFft && devParms.mathFftSplit)
         return;
     for(chn = 0; chn < devParms.channelCnt; chn++) {
-        if(!devParms.chanDisplay[chn])
+        if(!devParms.chan[chn].Display)
             continue;
-        if(devParms.chanscale[chn] <= 1e-2) {
-            devParms.chanscale[chn] = 1e-2;
+        if(devParms.chan[chn].scale <= 1e-2) {
+            devParms.chan[chn].scale = 1e-2;
             return;
         }
 
-        ltmp = devParms.chanscale[chn];
-        if(devParms.chanvernier[chn])
-            val = roundUpStep125(devParms.chanscale[chn], nullptr);
+        ltmp = devParms.chan[chn].scale;
+        if(devParms.chan[chn].vernier)
+            val = roundUpStep125(devParms.chan[chn].scale, nullptr);
         else
-            val = roundDownStep125(devParms.chanscale[chn], nullptr);
-        if(devParms.chanvernier[chn]) {
+            val = roundDownStep125(devParms.chan[chn].scale, nullptr);
+        if(devParms.chan[chn].vernier) {
             val /= 100;
-            devParms.chanscale[chn] -= val;
+            devParms.chan[chn].scale -= val;
         } else {
-            devParms.chanscale[chn] = val;
+            devParms.chan[chn].scale = val;
         }
 
         ltmp /= val;
-        devParms.chanoffset[chn] /= ltmp;
+        devParms.chan[chn].offset /= ltmp;
         snprintf(str, 512, "Channel %i scale: ", chn + 1);
-        convertToMetricSuffix(str + strlen(str), devParms.chanscale[chn], 2, 512 - strlen(str));
+        convertToMetricSuffix(str + strlen(str), devParms.chan[chn].scale, 2, 512 - strlen(str));
         strlcat(str, "V", 512);
         statusLabel->setText(str);
-        snprintf(str, 512, ":CHAN%i:SCAL %e", chn + 1, devParms.chanscale[chn]);
+        snprintf(str, 512, ":CHAN%i:SCAL %e", chn + 1, devParms.chan[chn].scale);
         setCueCmd(str);
     }
 
@@ -1657,15 +1579,15 @@ void UiMainWindow::shiftTraceUp() {
     }
 
     chn = devParms.activechannel;
-    if(devParms.chanoffset[chn] >= 20) {
-        devParms.chanoffset[chn] = 20;
+    if(devParms.chan[chn].offset >= 20) {
+        devParms.chan[chn].offset = 20;
         return;
     }
 
-    devParms.chanoffset[chn] += devParms.chanscale[chn];
+    devParms.chan[chn].offset += devParms.chan[chn].scale;
     snprintf(str, 512, "Channel %i offset: ", chn + 1);
-    convertToMetricSuffix(str + strlen(str), devParms.chanoffset[chn], 2, 512 - strlen(str));
-    strlcat(str, devParms.chanunitstr[devParms.chanunit[chn]], 512);
+    convertToMetricSuffix(str + strlen(str), devParms.chan[chn].offset, 2, 512 - strlen(str));
+    strlcat(str, devParms.chan[devParms.chan[chn].unit].unitstr, 512);
     statusLabel->setText(str);
     waveForm->labelActive = chn + 1;
     labelTimer->start(LABEL_TIMER_IVAL);
@@ -1717,15 +1639,15 @@ void UiMainWindow::shiftTraceDown() {
     }
 
     chn = devParms.activechannel;
-    if(devParms.chanoffset[chn] <= -20) {
-        devParms.chanoffset[chn] = -20;
+    if(devParms.chan[chn].offset <= -20) {
+        devParms.chan[chn].offset = -20;
         return;
     }
 
-    devParms.chanoffset[chn] -= devParms.chanscale[chn];
+    devParms.chan[chn].offset -= devParms.chan[chn].scale;
     snprintf(str, 512, "Channel %i offset: ", chn + 1);
-    convertToMetricSuffix(str + strlen(str), devParms.chanoffset[chn], 2, 512 - strlen(str));
-    strlcat(str, devParms.chanunitstr[devParms.chanunit[chn]], 512);
+    convertToMetricSuffix(str + strlen(str), devParms.chan[chn].offset, 2, 512 - strlen(str));
+    strlcat(str, devParms.chan[devParms.chan[chn].unit].unitstr, 512);
     statusLabel->setText(str);
     waveForm->labelActive = chn + 1;
     labelTimer->start(LABEL_TIMER_IVAL);
@@ -1752,23 +1674,23 @@ void UiMainWindow::setToFactory() {
     devParms.timebasedelayenable = 0;
     devParms.timebasedelayoffset = 0;
     for(int i{}; i < MAX_CHNS; i++) {
-        devParms.chanscale[i] = 1;
-        devParms.chanoffset[i] = 0;
-        devParms.chanDisplay[i] = 0;
-        devParms.chancoupling[i] = 1;
-        devParms.chanbwlimit[i] = 0;
-        devParms.chanprobe[i] = 10;
-        devParms.chaninvert[i] = 0;
-        devParms.chanvernier[i] = 0;
+        devParms.chan[i].scale = 1;
+        devParms.chan[i].offset = 0;
+        devParms.chan[i].Display = 0;
+        devParms.chan[i].coupling = Coup::DC;
+        devParms.chan[i].bwlimit = 0;
+        devParms.chan[i].probe = 10;
+        devParms.chan[i].invert = 0;
+        devParms.chan[i].vernier = 0;
         devParms.triggeredgelevel[i] = 0;
     }
 
-    devParms.chanDisplay[0] = 1;
+    devParms.chan[0].Display = 1;
     devParms.activechannel = 0;
     devParms.acquiretype = 0;
     devParms.acquirememdepth = 0;
     devParms.triggermode = 0;
-    devParms.triggeredgesource = 0;
+    devParms.triggeredgesource = CHAN::OFF;
     devParms.triggeredgeslope = 0;
     devParms.triggerstatus = 3;
     devParms.triggercoupling = 1;
@@ -1890,7 +1812,7 @@ void UiMainWindow::screenUpdate() {
     }
 
     for(int i{}; i < MAX_CHNS; i++) {
-        if(!devParms.chanDisplay[i]) // Display data only when channel is switched on
+        if(!devParms.chan[i].Display) // Display data only when channel is switched on
             continue;
         chns++;
     }

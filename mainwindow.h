@@ -152,71 +152,8 @@ private:
     QDockWidget* dockPanelRight;
     QWidget* DPRwidget;
 
-#if 0
-    QLabel
-        *adjDialLabel,
-        *horScaleLabel,
-        *horPosLabel,
-        *vertScaleLabel,
-        *vertOffsetLabel,
-        *trigLevelLabel,
-        *trigModeLabel,
-        *ch1InputLabel,
-        *ch2InputLabel,
-        *ch3InputLabel,
-        *ch4InputLabel;
-
-
-    QGroupBox
-        *verticalGrpBox,
-        *horizontalGrpBox,
-        *triggerGrpBox,
-        *menuGrpBox,
-        *quickGrpBox;
-
-    QPushButton
-        *ch1Button,
-        *ch2Button,
-        *ch3Button,
-        *ch4Button,
-        *chanMenuButton,
-        *clearButton,
-        *autoButton,
-        *runButton,
-        *singleButton,
-        *horMenuButton,
-        *trigModeButton,
-        *trigMenuButton,
-        *trigForceButton,
-        *trig50pctButton,
-        *acqButton,
-        *cursButton,
-        *saveButton,
-        *dispButton,
-        *utilButton,
-        *helpButton,
-        *playpauseButton,
-        *stopButton,
-        *recordButton,
-        *measureButton,
-        *mathMenuButton;
-
-    Dial
-        *adjDial,
-        *horScaleDial,
-        *horPosDial,
-        *vertScaleDial,
-        *vertOffsetDial,
-        *trigAdjustDial,
-        *navDial;
-
-    Led
-        *trigModeAutoLed,
-        *trigModeNormLed,
-        *trigModeSingLed;
-#else
     std::array<QPushButton*, MAX_CHNS> chButtons;
-#endif
+
     QString defStylesh;
 
     QImage screenXpm;

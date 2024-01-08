@@ -69,10 +69,10 @@ SignalCurve::SignalCurve(QWidget* w_parent)
     labelActive = LABEL_ACTIVE_NONE;
 
     for(int i{}; i < MAX_CHNS; i++) {
-        chanArrowMoving[i] = 0;
-        chanArrowPos[i] = 127;
-        chanTmpYPixelOffset[i] = 0;
-        chanTmpOldYPixelOffset[i] = 0;
+        chan[i].ArrowMoving = 0;
+        chan[i].ArrowPos = 127;
+        chan[i].TmpYPixelOffset = 0;
+        chan[i].TmpOldYPixelOffset = 0;
     }
 
     trigLevelArrowMoving = 0;
@@ -282,27 +282,25 @@ void SignalCurve::drawWidget(QPainter* painter, int curve_w, int curve_h) {
     drawTrigCenterArrow(painter, curve_w / 2, 0);
 
     for(chn = 0; chn < devParms->channelCnt; chn++) {
-        if(!devParms->chanDisplay[chn])
+        if(!devParms->chan[chn].Display)
             continue;
 
-        if(chanArrowMoving[chn]) {
-            drawArrow(painter, 0, chanArrowPos[chn], 0, SignalColor[chn], '1' + chn);
+        if(chan[chn].ArrowMoving) {
+            drawArrow(painter, 0, chan[chn].ArrowPos, 0, SignalColor[chn], '1' + chn);
         } else {
-            chanArrowPos[chn] = (curve_h / 2)
-                - (devParms->chanoffset[chn]
-                    / ((devParms->chanscale[chn] * devParms->vertDivisions)
+            chan[chn].ArrowPos = (curve_h / 2)
+                - (devParms->chan[chn].offset
+                    / ((devParms->chan[chn].scale * devParms->vertDivisions)
                         / curve_h));
 
-            if(chanArrowPos[chn] < 0) {
-                chanArrowPos[chn] = -1;
-
-                drawArrow(painter, -6, chanArrowPos[chn], 3, SignalColor[chn], '1' + chn);
-            } else if(chanArrowPos[chn] > curve_h) {
-                chanArrowPos[chn] = curve_h + 1;
-
-                drawArrow(painter, -6, chanArrowPos[chn], 1, SignalColor[chn], '1' + chn);
+            if(chan[chn].ArrowPos < 0) {
+                chan[chn].ArrowPos = -1;
+                drawArrow(painter, -6, chan[chn].ArrowPos, 3, SignalColor[chn], '1' + chn);
+            } else if(chan[chn].ArrowPos > curve_h) {
+                chan[chn].ArrowPos = curve_h + 1;
+                drawArrow(painter, -6, chan[chn].ArrowPos, 1, SignalColor[chn], '1' + chn);
             } else {
-                drawArrow(painter, 0, chanArrowPos[chn], 0, SignalColor[chn], '1' + chn);
+                drawArrow(painter, 0, chan[chn].ArrowPos, 0, SignalColor[chn], '1' + chn);
             }
         }
     }
@@ -333,11 +331,11 @@ void SignalCurve::drawWidget(QPainter* painter, int curve_w, int curve_h) {
                 chns_done = 1;
             }
 
-            if(!devParms->chanDisplay[chn])
+            if(!devParms->chan[chn].Display)
                 continue;
 
             w_trace_offset = (curve_w / 2.0)
-                - (((devParms->timebaseoffset - devParms->xorigin[chn])
+                - (((devParms->timebaseoffset - devParms->chan[chn].xorigin)
                        / devParms->timebasescale)
                     * ((double)curve_w / (double)(devParms->horDivisions)));
 
@@ -351,29 +349,29 @@ void SignalCurve::drawWidget(QPainter* painter, int curve_w, int curve_h) {
                 if(bufSize < (curve_w / 2)) {
                     painter->drawLine(i * h_step + w_trace_offset,
                         (devParms->waveBuf[chn][i] * vSense) + (curve_h / 2)
-                            - chanTmpYPixelOffset[chn],
+                            - chan[chn].TmpYPixelOffset,
                         (i + 1) * h_step + w_trace_offset,
                         (devParms->waveBuf[chn][i] * vSense) + (curve_h / 2)
-                            - chanTmpYPixelOffset[chn]);
+                            - chan[chn].TmpYPixelOffset);
                     if(i)
                         painter->drawLine(i * h_step + w_trace_offset,
                             (devParms->waveBuf[chn][i - 1] * vSense) + (curve_h / 2)
-                                - chanTmpYPixelOffset[chn],
+                                - chan[chn].TmpYPixelOffset,
                             i * h_step + w_trace_offset,
                             (devParms->waveBuf[chn][i] * vSense) + (curve_h / 2)
-                                - chanTmpYPixelOffset[chn]);
+                                - chan[chn].TmpYPixelOffset);
                 } else if(i < (bufSize - 1)) {
                     if(devParms->displaytype)
                         painter->drawPoint(i * h_step + w_trace_offset,
                             (devParms->waveBuf[chn][i] * vSense) + (curve_h / 2)
-                                - chanTmpYPixelOffset[chn]);
+                                - chan[chn].TmpYPixelOffset);
                     else
                         painter->drawLine(i * h_step + w_trace_offset,
                             (devParms->waveBuf[chn][i] * vSense) + (curve_h / 2)
-                                - chanTmpYPixelOffset[chn],
+                                - chan[chn].TmpYPixelOffset,
                             (i + 1) * h_step + w_trace_offset,
                             (devParms->waveBuf[chn][i + 1] * vSense)
-                                + (curve_h / 2) - chanTmpYPixelOffset[chn]);
+                                + (curve_h / 2) - chan[chn].TmpYPixelOffset);
                 }
             }
         }
@@ -402,8 +400,8 @@ void SignalCurve::drawWidget(QPainter* painter, int curve_w, int curve_h) {
         if(devParms->triggeredgesource < 4) {
             trigLevelArrowPos = (curve_h / 2)
                 - ((devParms->triggeredgelevel[devParms->triggeredgesource]
-                       + devParms->chanoffset[devParms->triggeredgesource])
-                    / ((devParms->chanscale[devParms->triggeredgesource]
+                       + devParms->chan[devParms->triggeredgesource].offset)
+                    / ((devParms->chan[devParms->triggeredgesource].scale
                            * devParms->vertDivisions)
                         / curve_h));
 
@@ -485,31 +483,31 @@ void SignalCurve::drawWidget(QPainter* painter, int curve_w, int curve_h) {
             2,
             1024);
 
-        strlcat(str, devParms->chanunitstr[devParms->chanunit[devParms->triggeredgesource]], 1024);
+        strlcat(str, devParms->chan[devParms->chan[devParms->triggeredgesource].unit].unitstr, 1024);
 
         paintLabel(painter, curve_w - 120, curve_h - 50, 100, 20, str, QColor(255, 128, 0));
     } else if(labelActive == LABEL_ACTIVE_CHAN1) {
-        convertToMetricSuffix(str, devParms->chanoffset[0], 2, 1024);
+        convertToMetricSuffix(str, devParms->chan[0].offset, 2, 1024);
 
-        strlcat(str, devParms->chanunitstr[devParms->chanunit[0]], 1024);
+        strlcat(str, devParms->chan[devParms->chan[0].unit].unitstr, 1024);
 
         paintLabel(painter, 20, curve_h - 50, 100, 20, str, SignalColor[0]);
     } else if(labelActive == LABEL_ACTIVE_CHAN2) {
-        convertToMetricSuffix(str, devParms->chanoffset[1], 2, 1024);
+        convertToMetricSuffix(str, devParms->chan[1].offset, 2, 1024);
 
-        strlcat(str, devParms->chanunitstr[devParms->chanunit[1]], 1024);
+        strlcat(str, devParms->chan[devParms->chan[1].unit].unitstr, 1024);
 
         paintLabel(painter, 20, curve_h - 50, 100, 20, str, SignalColor[1]);
     } else if(labelActive == LABEL_ACTIVE_CHAN3) {
-        convertToMetricSuffix(str, devParms->chanoffset[2], 2, 1024);
+        convertToMetricSuffix(str, devParms->chan[2].offset, 2, 1024);
 
-        strlcat(str, devParms->chanunitstr[devParms->chanunit[2]], 1024);
+        strlcat(str, devParms->chan[devParms->chan[2].unit].unitstr, 1024);
 
         paintLabel(painter, 20, curve_h - 50, 100, 20, str, SignalColor[2]);
     } else if(labelActive == LABEL_ACTIVE_CHAN4) {
-        convertToMetricSuffix(str, devParms->chanoffset[3], 2, 1024);
+        convertToMetricSuffix(str, devParms->chan[3].offset, 2, 1024);
 
-        strlcat(str, devParms->chanunitstr[devParms->chanunit[3]], 1024);
+        strlcat(str, devParms->chan[devParms->chan[3].unit].unitstr, 1024);
 
         paintLabel(painter, 20, curve_h - 50, 100, 20, str, SignalColor[3]);
     }
@@ -660,7 +658,7 @@ void SignalCurve::drawFFT(QPainter* painter, int curve_h_b, int curve_w_b) {
     if(bufSize < 32)
         return;
 
-    if((devParms->fftBufsz > 32) && devParms->chanDisplay[devParms->mathFftSrc]) {
+    if((devParms->fftBufsz > 32) && devParms->chan[devParms->mathFftSrc].Display) {
         painter->setClipping(true);
         painter->setClipRegion(QRegion(0, 0, curveW, curveH), Qt::ReplaceClip);
 
@@ -989,7 +987,7 @@ void SignalCurve::drawTopLabels(QPainter* painter) {
 
     convertToMetricSuffix(str, devParms->triggeredgelevel[devParms->triggeredgesource], 2, 512);
 
-    strlcat(str, devParms->chanunitstr[devParms->chanunit[devParms->triggeredgesource]], 512);
+    strlcat(str, devParms->chan[devParms->chan[devParms->triggeredgesource].unit].unitstr, 512);
 
     if(devParms->triggeredgesource < 4) {
         painter->setPen(SignalColor[devParms->triggeredgesource]);
@@ -1098,14 +1096,14 @@ void SignalCurve::drawChanLabel(QPainter* painter, int xpos, int ypos, int chn) 
     str1[0] = '1' + chn;
     str1[1] = 0;
 
-    convertToMetricSuffix(str2, devParms->chanscale[chn], 2, 512);
+    convertToMetricSuffix(str2, devParms->chan[chn].scale, 2, 512);
 
-    strlcat(str2, devParms->chanunitstr[devParms->chanunit[chn]], 512);
+    strlcat(str2, devParms->chan[devParms->chan[chn].unit].unitstr, 512);
 
-    if(devParms->chanbwlimit[chn])
+    if(devParms->chan[chn].bwlimit)
         strlcat(str2, " B", 512);
 
-    if(devParms->chanDisplay[chn]) {
+    if(devParms->chan[chn].Display) {
         if(chn == devParms->activechannel) {
             path.addRoundedRect(xpos, ypos, 20, 20, 3, 3);
 
@@ -1115,40 +1113,33 @@ void SignalCurve::drawChanLabel(QPainter* painter, int xpos, int ypos, int chn) 
 
             painter->drawText(xpos + 6, ypos + 15, str1);
 
-            if(devParms->chaninvert[chn])
+            if(devParms->chan[chn].invert)
                 painter->drawLine(xpos + 6, ypos + 3, xpos + 14, ypos + 3);
 
             path = QPainterPath();
-
             path.addRoundedRect(xpos + 25, ypos, 90, 20, 3, 3);
-
             painter->fillPath(path, Qt::black);
-
             painter->setPen(SignalColor[chn]);
-
             painter->drawRoundedRect(xpos + 25, ypos, 90, 20, 3, 3);
-
             painter->drawText(xpos + 35, ypos + 1, 90, 20, Qt::AlignCenter, str2);
-
-            if(devParms->chancoupling[chn] == 0) {
-                painter->drawLine(xpos + 33, ypos + 6, xpos + 33, ypos + 10);
-
-                painter->drawLine(xpos + 28, ypos + 10, xpos + 38, ypos + 10);
-
-                painter->drawLine(xpos + 30, ypos + 12, xpos + 36, ypos + 12);
-
-                painter->drawLine(xpos + 32, ypos + 14, xpos + 34, ypos + 14);
-            } else if(devParms->chancoupling[chn] == 1) {
-                painter->drawLine(xpos + 28, ypos + 8, xpos + 38, ypos + 8);
-
-                painter->drawLine(xpos + 28, ypos + 12, xpos + 30, ypos + 12);
-
-                painter->drawLine(xpos + 32, ypos + 12, xpos + 34, ypos + 12);
-
-                painter->drawLine(xpos + 36, ypos + 12, xpos + 38, ypos + 12);
-            } else if(devParms->chancoupling[chn] == 2) {
+            if(devParms->chan[chn].coupling == Coup::GND) {
+                QLine lines[]{
+                    {xpos + 33, ypos + 6,  xpos + 33, ypos + 10},
+                    {xpos + 28, ypos + 10, xpos + 38, ypos + 10},
+                    {xpos + 30, ypos + 12, xpos + 36, ypos + 12},
+                    {xpos + 32, ypos + 14, xpos + 34, ypos + 14},
+                };
+                painter->drawLines(lines, 4);
+            } else if(devParms->chan[chn].coupling == Coup::DC) {
+                QLine lines[]{
+                    {xpos + 28, ypos + 8,  xpos + 38, ypos + 8 },
+                    {xpos + 28, ypos + 12, xpos + 30, ypos + 12},
+                    {xpos + 32, ypos + 12, xpos + 34, ypos + 12},
+                    {xpos + 36, ypos + 12, xpos + 38, ypos + 12},
+                };
+                painter->drawLines(lines, 4);
+            } else if(devParms->chan[chn].coupling == Coup::AC) {
                 painter->drawArc(xpos + 30, ypos + 8, 5, 5, 10 * 16, 160 * 16);
-
                 painter->drawArc(xpos + 35, ypos + 8, 5, 5, -10 * 16, -160 * 16);
             }
         } else {
@@ -1162,68 +1153,63 @@ void SignalCurve::drawChanLabel(QPainter* painter, int xpos, int ypos, int chn) 
 
             painter->drawText(xpos + 6, ypos + 15, str1);
 
-            if(devParms->chaninvert[chn])
+            if(devParms->chan[chn].invert)
                 painter->drawLine(xpos + 6, ypos + 3, xpos + 14, ypos + 3);
 
             painter->drawText(xpos + 35, ypos + 1, 90, 20, Qt::AlignCenter, str2);
 
-            if(devParms->chancoupling[chn] == 0) {
-                painter->drawLine(xpos + 33, ypos + 6, xpos + 33, ypos + 10);
-
-                painter->drawLine(xpos + 28, ypos + 10, xpos + 38, ypos + 10);
-
-                painter->drawLine(xpos + 30, ypos + 12, xpos + 36, ypos + 12);
-
-                painter->drawLine(xpos + 32, ypos + 14, xpos + 34, ypos + 14);
-            } else if(devParms->chancoupling[chn] == 1) {
-                painter->drawLine(xpos + 28, ypos + 8, xpos + 38, ypos + 8);
-
-                painter->drawLine(xpos + 28, ypos + 12, xpos + 30, ypos + 12);
-
-                painter->drawLine(xpos + 32, ypos + 12, xpos + 34, ypos + 12);
-
-                painter->drawLine(xpos + 36, ypos + 12, xpos + 38, ypos + 12);
-            } else if(devParms->chancoupling[chn] == 2) {
+            if(devParms->chan[chn].coupling == Coup::GND) {
+                QLine lines[]{
+                    {xpos + 33, ypos + 6,  xpos + 33, ypos + 10},
+                    {xpos + 28, ypos + 10, xpos + 38, ypos + 10},
+                    {xpos + 30, ypos + 12, xpos + 36, ypos + 12},
+                    {xpos + 32, ypos + 14, xpos + 34, ypos + 14},
+                };
+                painter->drawLines(lines, 4);
+            } else if(devParms->chan[chn].coupling == Coup::DC) {
+                QLine lines[]{
+                    {xpos + 28, ypos + 8,  xpos + 38, ypos + 8 },
+                    {xpos + 28, ypos + 12, xpos + 30, ypos + 12},
+                    {xpos + 32, ypos + 12, xpos + 34, ypos + 12},
+                    {xpos + 36, ypos + 12, xpos + 38, ypos + 12},
+                };
+                painter->drawLines(lines, 4);
+            } else if(devParms->chan[chn].coupling == Coup::AC) {
                 painter->drawArc(xpos + 30, ypos + 8, 5, 5, 10 * 16, 160 * 16);
-
                 painter->drawArc(xpos + 35, ypos + 8, 5, 5, -10 * 16, -160 * 16);
             }
         }
     } else {
         path.addRoundedRect(xpos, ypos, 20, 20, 3, 3);
-
         path.addRoundedRect(xpos + 25, ypos, 85, 20, 3, 3);
-
         painter->fillPath(path, Qt::black);
 
         painter->setPen(QColor(48, 48, 48));
 
         painter->drawText(xpos + 6, ypos + 15, str1);
-
         painter->drawText(xpos + 30, ypos + 1, 85, 20, Qt::AlignCenter, str2);
 
-        if(devParms->chanbwlimit[chn])
+        if(devParms->chan[chn].bwlimit)
             painter->drawText(xpos + 90, ypos + 1, 20, 20, Qt::AlignCenter, "B");
 
-        if(devParms->chancoupling[chn] == 0) {
-            painter->drawLine(xpos + 33, ypos + 6, xpos + 33, ypos + 10);
-
-            painter->drawLine(xpos + 28, ypos + 10, xpos + 38, ypos + 10);
-
-            painter->drawLine(xpos + 30, ypos + 12, xpos + 36, ypos + 12);
-
-            painter->drawLine(xpos + 32, ypos + 14, xpos + 34, ypos + 14);
-        } else if(devParms->chancoupling[chn] == 1) {
-            painter->drawLine(xpos + 28, ypos + 8, xpos + 38, ypos + 8);
-
-            painter->drawLine(xpos + 28, ypos + 12, xpos + 30, ypos + 12);
-
-            painter->drawLine(xpos + 32, ypos + 12, xpos + 34, ypos + 12);
-
-            painter->drawLine(xpos + 36, ypos + 12, xpos + 38, ypos + 12);
-        } else if(devParms->chancoupling[chn] == 2) {
+        if(devParms->chan[chn].coupling == Coup::GND) {
+            QLine lines[]{
+                {xpos + 33, ypos + 6,  xpos + 33, ypos + 10},
+                {xpos + 28, ypos + 10, xpos + 38, ypos + 10},
+                {xpos + 30, ypos + 12, xpos + 36, ypos + 12},
+                {xpos + 32, ypos + 14, xpos + 34, ypos + 14},
+            };
+            painter->drawLines(lines, 4);
+        } else if(devParms->chan[chn].coupling == Coup::DC) {
+            QLine lines[]{
+                {xpos + 28, ypos + 8,  xpos + 38, ypos + 8 },
+                {xpos + 28, ypos + 12, xpos + 30, ypos + 12},
+                {xpos + 32, ypos + 12, xpos + 34, ypos + 12},
+                {xpos + 36, ypos + 12, xpos + 38, ypos + 12},
+            };
+            painter->drawLines(lines, 4);
+        } else if(devParms->chan[chn].coupling == Coup::AC) {
             painter->drawArc(xpos + 30, ypos + 8, 5, 5, 10 * 16, 160 * 16);
-
             painter->drawArc(xpos + 35, ypos + 8, 5, 5, -10 * 16, -160 * 16);
         }
     }
@@ -1472,22 +1458,22 @@ void SignalCurve::mousePressEvent(QMouseEvent* press_event) {
             mouseOldY = m_y;
         } else {
             for(chn = 0; chn < devParms->channelCnt; chn++) {
-                if(!devParms->chanDisplay[chn])
+                if(!devParms->chan[chn].Display)
                     continue;
 
-                if((m_x > -26 && (m_x < 0) && (m_y > (chanArrowPos[chn] - 7))
-                       && (m_y < (chanArrowPos[chn] + 7)))
-                    || ((chanArrowPos[chn] < 0) && (m_x > -18) && (m_x <= 0) && (m_y >= 0)
+                if((m_x > -26 && (m_x < 0) && (m_y > (chan[chn].ArrowPos - 7))
+                       && (m_y < (chan[chn].ArrowPos + 7)))
+                    || ((chan[chn].ArrowPos < 0) && (m_x > -18) && (m_x <= 0) && (m_y >= 0)
                         && (m_y < 22))
-                    || ((chanArrowPos[chn] > h) && (m_x > -18) && (m_x <= 0) && (m_y <= h)
+                    || ((chan[chn].ArrowPos > h) && (m_x > -18) && (m_x <= 0) && (m_y <= h)
                         && (m_y > (h - 22)))) {
-                    chanArrowMoving[chn] = 1;
+                    chan[chn].ArrowMoving = 1;
                     devParms->activechannel = chn;
                     useMoveEvents = 1;
                     setMouseTracking(true);
                     mouseOldX = m_x;
                     mouseOldY = m_y;
-                    chanTmpOldYPixelOffset[chn] = m_y;
+                    chan[chn].TmpOldYPixelOffset = m_y;
 
                     break;
                 }
@@ -1645,19 +1631,19 @@ void SignalCurve::mouseReleaseEvent(QMouseEvent* release_event) {
         if(trigLevelArrowPos > h)
             trigLevelArrowPos = h;
 
-        //       printf("chanoffset[chn] is: %e   chanscale[chn] is %e   trig_level_arrow_pos is: %i   v_sense is: %e\n",
-        //              devParms->chanoffset[chn], devParms->chanscale[chn], trig_level_arrow_pos, v_sense);
+        //       printf("chan[chn] is: %e   chanscale[chn].offset is %e   trig_level_arrow_pos is: %i   v_sense is: %e\n",
+        //              devParms->chan[chn], devParms->chanscale[chn].offset, trig_level_arrow_pos, v_sense);
 
         devParms->triggeredgelevel[devParms->triggeredgesource]
             = (((h / 2) - trigLevelArrowPos)
-                  * ((devParms->chanscale[devParms->triggeredgesource] * devParms->vertDivisions) / h))
-            - devParms->chanoffset[devParms->triggeredgesource];
+                  * ((devParms->chan[devParms->triggeredgesource].scale * devParms->vertDivisions) / h))
+            - devParms->chan[devParms->triggeredgesource].offset;
 
         tmp = devParms->triggeredgelevel[devParms->triggeredgesource]
-            / (devParms->chanscale[devParms->triggeredgesource] / 50);
+            / (devParms->chan[devParms->triggeredgesource].scale / 50);
 
         devParms->triggeredgelevel[devParms->triggeredgesource]
-            = (devParms->chanscale[devParms->triggeredgesource] / 50) * tmp;
+            = (devParms->chan[devParms->triggeredgesource].scale / 50) * tmp;
 
         snprintf(str, 512, "Trigger level: ");
 
@@ -1666,7 +1652,7 @@ void SignalCurve::mouseReleaseEvent(QMouseEvent* release_event) {
             2,
             512 - strlen(str));
 
-        strlcat(str, devParms->chanunitstr[devParms->chanunit[devParms->triggeredgesource]], 512);
+        strlcat(str, devParms->chan[devParms->chan[devParms->triggeredgesource].unit].unitstr, 512);
 
         mainwindow->statusLabel->setText(str);
 
@@ -1680,49 +1666,49 @@ void SignalCurve::mouseReleaseEvent(QMouseEvent* release_event) {
         trigLineTimer->start(1300);
     } else {
         for(chn = 0; chn < devParms->channelCnt; chn++) {
-            if(!devParms->chanDisplay[chn])
+            if(!devParms->chan[chn].Display)
                 continue;
 
-            if(chanArrowMoving[chn]) {
-                chanArrowPos[chn] = mouseY;
+            if(chan[chn].ArrowMoving) {
+                chan[chn].ArrowPos = mouseY;
 
-                if(chanArrowPos[chn] < 0)
-                    chanArrowPos[chn] = 0;
+                if(chan[chn].ArrowPos < 0)
+                    chan[chn].ArrowPos = 0;
 
-                if(chanArrowPos[chn] > h)
-                    chanArrowPos[chn] = h;
+                if(chan[chn].ArrowPos > h)
+                    chan[chn].ArrowPos = h;
 
-                //       printf("chanoffset[chn] is: %e   chanscale[chn] is %e   chan_arrow_pos[chn] is: %i   v_sense is: %e\n",
-                //              devParms->chanoffset[chn], devParms->chanscale[chn], chan_arrow_pos[chn], v_sense);
+                //       printf("chan[chn] is: %e   chanscale[chn] is %e   chan_arrow_pos[chn].offset is: %i   v_sense is: %e\n",
+                //              devParms->chan[chn], devParms->chanscale[chn], chan_arrow_pos[chn].offset, v_sense);
 
-                devParms->chanoffset[chn] = ((h / 2) - chanArrowPos[chn])
-                    * ((devParms->chanscale[chn] * devParms->vertDivisions)
+                devParms->chan[chn].offset = ((h / 2) - chan[chn].ArrowPos)
+                    * ((devParms->chan[chn].scale * devParms->vertDivisions)
                         / h);
 
-                tmp = devParms->chanoffset[chn] / (devParms->chanscale[chn] / 50);
+                tmp = devParms->chan[chn].offset / (devParms->chan[chn].scale / 50);
 
-                devParms->chanoffset[chn] = (devParms->chanscale[chn] / 50) * tmp;
+                devParms->chan[chn].offset = (devParms->chan[chn].scale / 50) * tmp;
 
                 snprintf(str, 512, "Channel %i offset: ", chn + 1);
 
                 convertToMetricSuffix(str + strlen(str),
-                    devParms->chanoffset[chn],
+                    devParms->chan[chn].offset,
                     3,
                     512 - strlen(str));
 
-                strlcat(str, devParms->chanunitstr[devParms->chanunit[chn]], 512);
+                strlcat(str, devParms->chan[devParms->chan[chn].unit].unitstr, 512);
 
                 mainwindow->statusLabel->setText(str);
 
-                snprintf(str, 512, ":CHAN%i:OFFS %e", chn + 1, devParms->chanoffset[chn]);
+                snprintf(str, 512, ":CHAN%i:OFFS %e", chn + 1, devParms->chan[chn].offset);
 
                 mainwindow->setCueCmd(str);
 
                 devParms->activechannel = chn;
 
-                chanTmpYPixelOffset[chn] = 0;
+                chan[chn].TmpYPixelOffset = 0;
 
-                chanTmpOldYPixelOffset[chn] = 0;
+                chan[chn].TmpOldYPixelOffset = 0;
 
                 break;
             }
@@ -1730,7 +1716,7 @@ void SignalCurve::mouseReleaseEvent(QMouseEvent* release_event) {
     }
 
     for(chn = 0; chn < MAX_CHNS; chn++)
-        chanArrowMoving[chn] = 0;
+        chan[chn].ArrowMoving = 0;
     trigLevelArrowMoving = 0;
     trigPosArrowMoving = 0;
     useMoveEvents = 0;
@@ -1804,44 +1790,43 @@ void SignalCurve::mouseMoveEvent(QMouseEvent* move_event) {
 
         devParms->triggeredgelevel[devParms->triggeredgesource]
             = (((h / 2) - trigLevelArrowPos)
-                  * ((devParms->chanscale[devParms->triggeredgesource] * devParms->vertDivisions) / h))
-            - devParms->chanoffset[devParms->triggeredgesource];
+                  * ((devParms->chan[devParms->triggeredgesource].scale * devParms->vertDivisions) / h))
+            - devParms->chan[devParms->triggeredgesource].offset;
 
         dtmp = devParms->triggeredgelevel[devParms->triggeredgesource]
-            / (devParms->chanscale[devParms->triggeredgesource] / 50);
+            / (devParms->chan[devParms->triggeredgesource].scale / 50);
 
         devParms->triggeredgelevel[devParms->triggeredgesource]
-            = (devParms->chanscale[devParms->triggeredgesource] / 50) * dtmp;
+            = (devParms->chan[devParms->triggeredgesource].scale / 50) * dtmp;
 
         labelActive = LABEL_ACTIVE_TRIG;
 
         mainwindow->labelTimer->start(LABEL_TIMER_IVAL);
     } else {
         for(chn = 0; chn < devParms->channelCnt; chn++) {
-            if(!devParms->chanDisplay[chn])
+            if(!devParms->chan[chn].Display)
                 continue;
 
-            if(chanArrowMoving[chn]) {
-                chanArrowPos[chn] = mouseY;
+            if(chan[chn].ArrowMoving) {
+                chan[chn].ArrowPos = mouseY;
 
-                if(chanArrowPos[chn] < 0)
-                    chanArrowPos[chn] = 0;
+                if(chan[chn].ArrowPos < 0)
+                    chan[chn].ArrowPos = 0;
 
-                if(chanArrowPos[chn] > h)
-                    chanArrowPos[chn] = h;
+                if(chan[chn].ArrowPos > h)
+                    chan[chn].ArrowPos = h;
 
-                devParms->chanoffset[chn] = ((h / 2) - chanArrowPos[chn])
-                    * ((devParms->chanscale[chn] * devParms->vertDivisions)
+                devParms->chan[chn].offset = ((h / 2) - chan[chn].ArrowPos)
+                    * ((devParms->chan[chn].scale * devParms->vertDivisions)
                         / h);
 
-                //          chan_tmp_y_pixel_offset[chn] = (h / 2) - chan_arrow_pos[chn];
+                //          chan[chn] = (h / 2) - chan_arrow_pos[chn]._tmp_y_pixel_offset;
 
-                chanTmpYPixelOffset[chn] = chanTmpOldYPixelOffset[chn]
-                    - chanArrowPos[chn];
+                chan[chn].TmpYPixelOffset = chan[chn].TmpOldYPixelOffset - chan[chn].ArrowPos;
 
-                dtmp = devParms->chanoffset[chn] / (devParms->chanscale[chn] / 50);
+                dtmp = devParms->chan[chn].offset / (devParms->chan[chn].scale / 50);
 
-                devParms->chanoffset[chn] = (devParms->chanscale[chn] / 50) * dtmp;
+                devParms->chan[chn].offset = (devParms->chan[chn].scale / 50) * dtmp;
 
                 labelActive = chn + 1;
 
@@ -1980,8 +1965,8 @@ bool SignalCurve::hasMoveEvent(void) {
 }
 
 void SignalCurve::draw_decoder(QPainter* painter, int dw, int dh) {
-    int i, j, k, cell_width, base_line, line_h_uart_tx = 0, line_h_uart_rx = 0, line_h_spi_mosi = 0,
-                                        line_h_spi_miso = 0, spi_chars = 1, pixel_per_bit = 1;
+    int j, k, cell_width, base_line, line_h_uart_tx = 0, line_h_uart_rx = 0, line_h_spi_mosi = 0,
+                                     line_h_spi_miso = 0, spi_chars = 1, pixel_per_bit = 1;
 
     double pix_per_smpl;
 

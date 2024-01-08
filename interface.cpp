@@ -116,7 +116,6 @@ void UiMainWindow::navDialChanged(int npos) {
 
 void UiMainWindow::navDialReleased() {
     char str[512];
-
     navDial->setSliderPosition(50);
 
     if(navDialFunc == NAV_DIAL_FUNC_HOLDOFF) {
@@ -232,7 +231,6 @@ void UiMainWindow::trigAdjustDialChanged(int newPos) {
     int diff, dir, chn;
 
     char str[512];
-
     if(devParms.activechannel < 0)
         return;
 
@@ -260,32 +258,32 @@ void UiMainWindow::trigAdjustDialChanged(int newPos) {
         dir = 0;
 
     if(dir) {
-        if(devParms.triggeredgelevel[chn] <= (-6 * devParms.chanscale[chn])) {
-            devParms.triggeredgelevel[chn] = -6 * devParms.chanscale[chn];
+        if(devParms.triggeredgelevel[chn] <= (-6 * devParms.chan[chn].scale)) {
+            devParms.triggeredgelevel[chn] = -6 * devParms.chan[chn].scale;
 
             oldPos = newPos;
 
             return;
         }
 
-        devParms.triggeredgelevel[chn] -= devParms.chanscale[chn] / 50;
+        devParms.triggeredgelevel[chn] -= devParms.chan[chn].scale / 50;
     } else {
-        if(devParms.triggeredgelevel[chn] >= (6 * devParms.chanscale[chn])) {
-            devParms.triggeredgelevel[chn] = 6 * devParms.chanscale[chn];
+        if(devParms.triggeredgelevel[chn] >= (6 * devParms.chan[chn].scale)) {
+            devParms.triggeredgelevel[chn] = 6 * devParms.chan[chn].scale;
 
             oldPos = newPos;
 
             return;
         }
 
-        devParms.triggeredgelevel[chn] += devParms.chanscale[chn] / 50;
+        devParms.triggeredgelevel[chn] += devParms.chan[chn].scale / 50;
     }
 
     strlcpy(str, "Trigger level: ", 512);
 
     convertToMetricSuffix(str + strlen(str), devParms.triggeredgelevel[chn], 2, 512);
 
-    strlcat(str, devParms.chanunitstr[devParms.chanunit[chn]], 512);
+    strlcat(str, devParms.chan[devParms.chan[chn].unit].unitstr, 512);
 
     statusLabel->setText(str);
 
@@ -308,7 +306,6 @@ void UiMainWindow::horScaleDialChanged(int newPos) {
     int diff, dir;
 
     char str[512];
-
     diff = newPos - oldPos;
 
     if(diff < 0)
@@ -454,7 +451,6 @@ void UiMainWindow::horPosDialChanged(int newPos) {
     int diff, dir;
 
     char str[512];
-
     if(devParms.activechannel < 0)
         return;
 
@@ -551,7 +547,6 @@ void UiMainWindow::vertOffsetDialChanged(int newPos) {
     int diff, dir, chn;
 
     char str[512];
-
     double val;
 
     if(devParms.activechannel < 0)
@@ -577,35 +572,35 @@ void UiMainWindow::vertOffsetDialChanged(int newPos) {
     else
         dir = 0;
 
-    val = roundUpStep125(devParms.chanscale[chn], nullptr) / 100;
+    val = roundUpStep125(devParms.chan[chn].scale, nullptr) / 100;
 
     if(dir) {
-        if(devParms.chanoffset[chn] <= -20) {
-            devParms.chanoffset[chn] = -20;
+        if(devParms.chan[chn].offset <= -20) {
+            devParms.chan[chn].offset = -20;
 
             oldPos = newPos;
 
             return;
         }
 
-        devParms.chanoffset[chn] -= val;
+        devParms.chan[chn].offset -= val;
     } else {
-        if(devParms.chanoffset[chn] >= 20) {
-            devParms.chanoffset[chn] = 20;
+        if(devParms.chan[chn].offset >= 20) {
+            devParms.chan[chn].offset = 20;
 
             oldPos = newPos;
 
             return;
         }
 
-        devParms.chanoffset[chn] += val;
+        devParms.chan[chn].offset += val;
     }
 
     snprintf(str, 512, "Channel %i offset: ", chn + 1);
 
-    convertToMetricSuffix(str + strlen(str), devParms.chanoffset[chn], 2, 512 - strlen(str));
+    convertToMetricSuffix(str + strlen(str), devParms.chan[chn].offset, 2, 512 - strlen(str));
 
-    strlcat(str, devParms.chanunitstr[devParms.chanunit[chn]], 512);
+    strlcat(str, devParms.chan[devParms.chan[chn].unit].unitstr, 512);
 
     statusLabel->setText(str);
 
@@ -628,7 +623,6 @@ void UiMainWindow::vertScaleDialChanged(int newPos) {
     double val, ltmp;
 
     char str[512];
-
     if(devParms.activechannel < 0)
         return;
 
@@ -653,52 +647,52 @@ void UiMainWindow::vertScaleDialChanged(int newPos) {
         dir = 0;
 
     if(dir) {
-        if(devParms.chanscale[chn] >= 20) {
-            devParms.chanscale[chn] = 20;
+        if(devParms.chan[chn].scale >= 20) {
+            devParms.chan[chn].scale = 20;
 
             oldPos = newPos;
 
             return;
         }
-    } else if(devParms.chanscale[chn] <= 1e-2) {
-        devParms.chanscale[chn] = 1e-2;
+    } else if(devParms.chan[chn].scale <= 1e-2) {
+        devParms.chan[chn].scale = 1e-2;
 
         oldPos = newPos;
 
         return;
     }
 
-    ltmp = devParms.chanscale[chn];
+    ltmp = devParms.chan[chn].scale;
 
-    if(dir || devParms.chanvernier[chn])
-        val = roundUpStep125(devParms.chanscale[chn], nullptr);
+    if(dir || devParms.chan[chn].vernier)
+        val = roundUpStep125(devParms.chan[chn].scale, nullptr);
     else
-        val = roundDownStep125(devParms.chanscale[chn], nullptr);
+        val = roundDownStep125(devParms.chan[chn].scale, nullptr);
 
-    if(devParms.chanvernier[chn]) {
+    if(devParms.chan[chn].vernier) {
         val /= 100;
 
         if(dir)
-            devParms.chanscale[chn] += val;
+            devParms.chan[chn].scale += val;
         else
-            devParms.chanscale[chn] -= val;
+            devParms.chan[chn].scale -= val;
     } else {
-        devParms.chanscale[chn] = val;
+        devParms.chan[chn].scale = val;
     }
 
-    ltmp /= devParms.chanscale[chn];
+    ltmp /= devParms.chan[chn].scale;
 
-    devParms.chanoffset[chn] /= ltmp;
+    devParms.chan[chn].offset /= ltmp;
 
     snprintf(str, 512, "Channel %i scale: ", chn + 1);
 
-    convertToMetricSuffix(str + strlen(str), devParms.chanscale[chn], 2, 512 - strlen(str));
+    convertToMetricSuffix(str + strlen(str), devParms.chan[chn].scale, 2, 512 - strlen(str));
 
-    strlcat(str, devParms.chanunitstr[devParms.chanunit[chn]], 512);
+    strlcat(str, devParms.chan[devParms.chan[chn].unit].unitstr, 512);
 
     statusLabel->setText(str);
 
-    snprintf(str, 512, ":CHAN%i:SCAL %e", chn + 1, devParms.chanscale[chn]);
+    snprintf(str, 512, ":CHAN%i:SCAL %e", chn + 1, devParms.chan[chn].scale);
     setCueCmd(str);
 
     oldPos = newPos;
@@ -718,10 +712,11 @@ void UiMainWindow::acqButtonClicked() {
     QList<QAction*> actionList;
 
     for(chn = 0; chn < MAX_CHNS; chn++)
-        if(devParms.chanDisplay[chn])
+        if(devParms.chan[chn].Display)
             chns_on++;
 
-    if((devParms.chanDisplay[0] && devParms.chanDisplay[1]) || (devParms.chanDisplay[2] && devParms.chanDisplay[3]))
+    if((devParms.chan[0].Display && devParms.chan[1].Display)
+        || (devParms.chan[2].Display && devParms.chan[3].Display))
         dual = 1;
 
     submenuacquisition.setTitle("Mode");
@@ -841,7 +836,6 @@ void UiMainWindow::acqButtonClicked() {
 
 void UiMainWindow::setMemDepth(int mdepth) {
     char str[512];
-
     QMessageBox msgBox;
 
     if(devParms.triggerstatus == 5) // Trigger status is STOP?
@@ -1390,14 +1384,13 @@ void UiMainWindow::vertScaleDialClicked(QPoint) {
     int chn;
 
     char str[512];
-
     if(devParms.activechannel < 0)
         return;
 
     chn = devParms.activechannel;
 
-    if(devParms.chanvernier[chn]) {
-        devParms.chanvernier[chn] = 0;
+    if(devParms.chan[chn].vernier) {
+        devParms.chan[chn].vernier = 0;
 
         snprintf(str, 512, "Channel %i vernier: off", chn + 1);
 
@@ -1406,7 +1399,7 @@ void UiMainWindow::vertScaleDialClicked(QPoint) {
         snprintf(str, 512, ":CHAN%i:VERN 0", chn + 1);
         setCueCmd(str);
     } else {
-        devParms.chanvernier[chn] = 1;
+        devParms.chan[chn].vernier = 1;
 
         snprintf(str, 512, "Channel %i vernier: on", chn + 1);
 
@@ -1418,15 +1411,15 @@ void UiMainWindow::vertScaleDialClicked(QPoint) {
 }
 
 void UiMainWindow::ch1ButtonClicked() {
-    if(devParms.chanDisplay[0]) {
+    if(devParms.chan[0].Display) {
         if(devParms.activechannel == 0) {
-            devParms.chanDisplay[0] = 0;
+            devParms.chan[0].Display = 0;
             statusLabel->setText("Channel 1 off");
             setCueCmd(":CHAN1:DISP 0");
             ch1Button->setStyleSheet(defStylesh);
             devParms.activechannel = -1;
             for(int i{}; i < MAX_CHNS; i++) {
-                if(devParms.chanDisplay[i]) {
+                if(devParms.chan[i].Display) {
                     devParms.activechannel = i;
                     break;
                 }
@@ -1435,7 +1428,7 @@ void UiMainWindow::ch1ButtonClicked() {
             devParms.activechannel = 0;
         }
     } else {
-        devParms.chanDisplay[0] = 1;
+        devParms.chan[0].Display = 1;
         statusLabel->setText("Channel 1 on");
         setCueCmd(":CHAN1:DISP 1");
         ch1Button->setStyleSheet("background: #FFFF33; color: black;");
@@ -1447,15 +1440,15 @@ void UiMainWindow::ch2ButtonClicked() {
     if(devParms.channelCnt < 2)
         return;
 
-    if(devParms.chanDisplay[1]) {
+    if(devParms.chan[1].Display) {
         if(devParms.activechannel == 1) {
-            devParms.chanDisplay[1] = 0;
+            devParms.chan[1].Display = 0;
             statusLabel->setText("Channel 2 off");
             setCueCmd(":CHAN2:DISP 0");
             ch2Button->setStyleSheet(defStylesh);
             devParms.activechannel = -1;
             for(int i{}; i < MAX_CHNS; i++) {
-                if(devParms.chanDisplay[i]) {
+                if(devParms.chan[i].Display) {
                     devParms.activechannel = i;
 
                     break;
@@ -1465,7 +1458,7 @@ void UiMainWindow::ch2ButtonClicked() {
             devParms.activechannel = 1;
         }
     } else {
-        devParms.chanDisplay[1] = 1;
+        devParms.chan[1].Display = 1;
         statusLabel->setText("Channel 2 on");
         setCueCmd(":CHAN2:DISP 1");
         ch2Button->setStyleSheet("background: #33FFFF; color: black;");
@@ -1477,15 +1470,15 @@ void UiMainWindow::ch3ButtonClicked() {
     if(devParms.channelCnt < 3)
         return;
 
-    if(devParms.chanDisplay[2]) {
+    if(devParms.chan[2].Display) {
         if(devParms.activechannel == 2) {
-            devParms.chanDisplay[2] = 0;
+            devParms.chan[2].Display = 0;
             statusLabel->setText("Channel 3 off");
             setCueCmd(":CHAN3:DISP 0");
             ch3Button->setStyleSheet(defStylesh);
             devParms.activechannel = -1;
             for(int i{}; i < MAX_CHNS; i++) {
-                if(devParms.chanDisplay[i]) {
+                if(devParms.chan[i].Display) {
                     devParms.activechannel = i;
 
                     break;
@@ -1495,7 +1488,7 @@ void UiMainWindow::ch3ButtonClicked() {
             devParms.activechannel = 2;
         }
     } else {
-        devParms.chanDisplay[2] = 1;
+        devParms.chan[2].Display = 1;
         statusLabel->setText("Channel 3 on");
         setCueCmd(":CHAN3:DISP 1");
         ch3Button->setStyleSheet("background: #FF33FF; color: black;");
@@ -1507,15 +1500,15 @@ void UiMainWindow::ch4ButtonClicked() {
     if(devParms.channelCnt < 4)
         return;
 
-    if(devParms.chanDisplay[3]) {
+    if(devParms.chan[3].Display) {
         if(devParms.activechannel == 3) {
-            devParms.chanDisplay[3] = 0;
+            devParms.chan[3].Display = 0;
             statusLabel->setText("Channel 4 off");
             setCueCmd(":CHAN4:DISP 0");
             ch4Button->setStyleSheet(defStylesh);
             devParms.activechannel = -1;
             for(int i{}; i < MAX_CHNS; i++) {
-                if(devParms.chanDisplay[i]) {
+                if(devParms.chan[i].Display) {
                     devParms.activechannel = i;
 
                     break;
@@ -1525,7 +1518,7 @@ void UiMainWindow::ch4ButtonClicked() {
             devParms.activechannel = 3;
         }
     } else {
-        devParms.chanDisplay[3] = 1;
+        devParms.chan[3].Display = 1;
         statusLabel->setText("Channel 4 on");
         setCueCmd(":CHAN4:DISP 1");
         ch4Button->setStyleSheet("background: #0066CC; color: black;");
@@ -1551,13 +1544,13 @@ void UiMainWindow::chanMenu() {
     submenucoupling.addAction("DC", this, &UiMainWindow::chanCouplingDc);
     submenucoupling.addAction("GND", this, &UiMainWindow::chanCouplingGnd);
     actionList = submenucoupling.actions();
-    if(devParms.chancoupling[devParms.activechannel] == 0) {
+    if(devParms.chan[devParms.activechannel].coupling == Coup::GND) {
         actionList[2]->setCheckable(true);
         actionList[2]->setChecked(true);
-    } else if(devParms.chancoupling[devParms.activechannel] == 1) {
+    } else if(devParms.chan[devParms.activechannel].coupling == Coup::DC) {
         actionList[1]->setCheckable(true);
         actionList[1]->setChecked(true);
-    } else if(devParms.chancoupling[devParms.activechannel] == 2) {
+    } else if(devParms.chan[devParms.activechannel].coupling == Coup::AC) {
         actionList[0]->setCheckable(true);
         actionList[0]->setChecked(true);
     }
@@ -1576,24 +1569,24 @@ void UiMainWindow::chanMenu() {
     if(devParms.modelSerie == 6)
         submenubwl.addAction("250MHz", this, &UiMainWindow::chanBwl250MHz);
     actionList = submenubwl.actions();
-    if(devParms.chanbwlimit[devParms.activechannel] == 0) {
+    if(devParms.chan[devParms.activechannel].bwlimit == 0) {
         actionList[0]->setCheckable(true);
         actionList[0]->setChecked(true);
-    } else if(devParms.chanbwlimit[devParms.activechannel] == 20) {
+    } else if(devParms.chan[devParms.activechannel].bwlimit == 20) {
         actionList[1]->setCheckable(true);
         actionList[1]->setChecked(true);
     } else if(devParms.modelSerie == 4) {
-        if(devParms.chanbwlimit[devParms.activechannel] == 100) {
+        if(devParms.chan[devParms.activechannel].bwlimit == 100) {
             actionList[2]->setCheckable(true);
             actionList[2]->setChecked(true);
         }
 
-        if(devParms.chanbwlimit[devParms.activechannel] == 200) {
+        if(devParms.chan[devParms.activechannel].bwlimit == 200) {
             actionList[3]->setCheckable(true);
             actionList[3]->setChecked(true);
         }
     } else if(devParms.modelSerie == 6) {
-        if(devParms.chanbwlimit[devParms.activechannel] == 250) {
+        if(devParms.chan[devParms.activechannel].bwlimit == 250) {
             actionList[2]->setCheckable(true);
             actionList[2]->setChecked(true);
         }
@@ -1629,65 +1622,65 @@ void UiMainWindow::chanMenu() {
     }
     actionList = submenuprobe.actions();
     if(devParms.modelSerie != 6) {
-        if(!dblcmp(devParms.chanprobe[devParms.activechannel], 0.01)) {
+        if(!dblcmp(devParms.chan[devParms.activechannel].probe, 0.01)) {
             actionList[0]->setCheckable(true);
             actionList[0]->setChecked(true);
-        } else if(!dblcmp(devParms.chanprobe[devParms.activechannel], 0.02)) {
+        } else if(!dblcmp(devParms.chan[devParms.activechannel].probe, 0.02)) {
             actionList[1]->setCheckable(true);
             actionList[1]->setChecked(true);
-        } else if(!dblcmp(devParms.chanprobe[devParms.activechannel], 0.05)) {
+        } else if(!dblcmp(devParms.chan[devParms.activechannel].probe, 0.05)) {
             actionList[2]->setCheckable(true);
             actionList[2]->setChecked(true);
-        } else if(!dblcmp(devParms.chanprobe[devParms.activechannel], 0.1)) {
+        } else if(!dblcmp(devParms.chan[devParms.activechannel].probe, 0.1)) {
             actionList[3]->setCheckable(true);
             actionList[3]->setChecked(true);
-        } else if(!dblcmp(devParms.chanprobe[devParms.activechannel], 0.2)) {
+        } else if(!dblcmp(devParms.chan[devParms.activechannel].probe, 0.2)) {
             actionList[4]->setCheckable(true);
             actionList[4]->setChecked(true);
-        } else if(!dblcmp(devParms.chanprobe[devParms.activechannel], 0.5)) {
+        } else if(!dblcmp(devParms.chan[devParms.activechannel].probe, 0.5)) {
             actionList[5]->setCheckable(true);
             actionList[5]->setChecked(true);
-        } else if(!dblcmp(devParms.chanprobe[devParms.activechannel], 1)) {
+        } else if(!dblcmp(devParms.chan[devParms.activechannel].probe, 1)) {
             actionList[6]->setCheckable(true);
             actionList[6]->setChecked(true);
-        } else if(!dblcmp(devParms.chanprobe[devParms.activechannel], 2)) {
+        } else if(!dblcmp(devParms.chan[devParms.activechannel].probe, 2)) {
             actionList[7]->setCheckable(true);
             actionList[7]->setChecked(true);
-        } else if(!dblcmp(devParms.chanprobe[devParms.activechannel], 5)) {
+        } else if(!dblcmp(devParms.chan[devParms.activechannel].probe, 5)) {
             actionList[8]->setCheckable(true);
             actionList[8]->setChecked(true);
-        } else if(!dblcmp(devParms.chanprobe[devParms.activechannel], 10)) {
+        } else if(!dblcmp(devParms.chan[devParms.activechannel].probe, 10)) {
             actionList[9]->setCheckable(true);
             actionList[9]->setChecked(true);
-        } else if(!dblcmp(devParms.chanprobe[devParms.activechannel], 20)) {
+        } else if(!dblcmp(devParms.chan[devParms.activechannel].probe, 20)) {
             actionList[10]->setCheckable(true);
             actionList[10]->setChecked(true);
-        } else if(!dblcmp(devParms.chanprobe[devParms.activechannel], 50)) {
+        } else if(!dblcmp(devParms.chan[devParms.activechannel].probe, 50)) {
             actionList[11]->setCheckable(true);
             actionList[11]->setChecked(true);
-        } else if(!dblcmp(devParms.chanprobe[devParms.activechannel], 100)) {
+        } else if(!dblcmp(devParms.chan[devParms.activechannel].probe, 100)) {
             actionList[12]->setCheckable(true);
             actionList[12]->setChecked(true);
-        } else if(!dblcmp(devParms.chanprobe[devParms.activechannel], 200)) {
+        } else if(!dblcmp(devParms.chan[devParms.activechannel].probe, 200)) {
             actionList[13]->setCheckable(true);
             actionList[13]->setChecked(true);
-        } else if(!dblcmp(devParms.chanprobe[devParms.activechannel], 500)) {
+        } else if(!dblcmp(devParms.chan[devParms.activechannel].probe, 500)) {
             actionList[14]->setCheckable(true);
             actionList[14]->setChecked(true);
-        } else if(!dblcmp(devParms.chanprobe[devParms.activechannel], 1000)) {
+        } else if(!dblcmp(devParms.chan[devParms.activechannel].probe, 1000)) {
             actionList[15]->setCheckable(true);
             actionList[15]->setChecked(true);
         }
-    } else if(!dblcmp(devParms.chanprobe[devParms.activechannel], 0.1)) {
+    } else if(!dblcmp(devParms.chan[devParms.activechannel].probe, 0.1)) {
         actionList[0]->setCheckable(true);
         actionList[0]->setChecked(true);
-    } else if(!dblcmp(devParms.chanprobe[devParms.activechannel], 1)) {
+    } else if(!dblcmp(devParms.chan[devParms.activechannel].probe, 1)) {
         actionList[1]->setCheckable(true);
         actionList[1]->setChecked(true);
-    } else if(!dblcmp(devParms.chanprobe[devParms.activechannel], 10)) {
+    } else if(!dblcmp(devParms.chan[devParms.activechannel].probe, 10)) {
         actionList[2]->setCheckable(true);
         actionList[2]->setChecked(true);
-    } else if(!dblcmp(devParms.chanprobe[devParms.activechannel], 100)) {
+    } else if(!dblcmp(devParms.chan[devParms.activechannel].probe, 100)) {
         actionList[3]->setCheckable(true);
         actionList[3]->setChecked(true);
     }
@@ -1697,7 +1690,7 @@ void UiMainWindow::chanMenu() {
     submenuinvert.addAction("On", this, &UiMainWindow::chanInvertOn);
     submenuinvert.addAction("Off", this, &UiMainWindow::chanInvertOff);
     actionList = submenuinvert.actions();
-    if(devParms.chaninvert[devParms.activechannel] == 1) {
+    if(devParms.chan[devParms.activechannel].invert == 1) {
         actionList[0]->setCheckable(true);
         actionList[0]->setChecked(true);
     } else {
@@ -1712,8 +1705,8 @@ void UiMainWindow::chanMenu() {
     submenuunit.addAction("Ampere", this, &UiMainWindow::chanUnitA);
     submenuunit.addAction("Unknown", this, &UiMainWindow::chanUnitU);
     actionList = submenuunit.actions();
-    actionList[devParms.chanunit[devParms.activechannel]]->setCheckable(true);
-    actionList[devParms.chanunit[devParms.activechannel]]->setChecked(true);
+    actionList[devParms.chan[devParms.activechannel].unit]->setCheckable(true);
+    actionList[devParms.chan[devParms.activechannel].unit]->setChecked(true);
     menu.addMenu(&submenuunit);
 
     menu.exec(chanMenuButton->mapToGlobal(QPoint(0, 0)));
@@ -1721,7 +1714,6 @@ void UiMainWindow::chanMenu() {
 
 void UiMainWindow::mathMenu() {
     char str[512];
-
     double val;
 
     QMenu menu,
@@ -1935,66 +1927,46 @@ void UiMainWindow::mathMenu() {
 
 void UiMainWindow::chanCouplingAc() {
     char str[512];
-
-    devParms.chancoupling[devParms.activechannel] = 2;
-
+    devParms.chan[devParms.activechannel].coupling = Coup::AC;
     snprintf(str, 512, "Channel %i coupling: AC", devParms.activechannel + 1);
-
     statusLabel->setText(str);
-
     snprintf(str, 512, ":CHAN%i:COUP AC", devParms.activechannel + 1);
     setCueCmd(str);
-
     updateLabels();
 }
 
 void UiMainWindow::chanCouplingDc() {
     char str[512];
-
-    devParms.chancoupling[devParms.activechannel] = 1;
-
+    devParms.chan[devParms.activechannel].coupling = Coup::DC;
     snprintf(str, 512, "Channel %i coupling: DC", devParms.activechannel + 1);
-
     statusLabel->setText(str);
-
     snprintf(str, 512, ":CHAN%i:COUP DC", devParms.activechannel + 1);
     setCueCmd(str);
-
     updateLabels();
 }
 
 void UiMainWindow::chanCouplingGnd() {
     char str[512];
-
-    devParms.chancoupling[devParms.activechannel] = 0;
-
+    devParms.chan[devParms.activechannel].coupling = Coup::GND;
     snprintf(str, 512, "Channel %i coupling: GND", devParms.activechannel + 1);
-
     statusLabel->setText(str);
-
     snprintf(str, 512, ":CHAN%i:COUP GND", devParms.activechannel + 1);
     setCueCmd(str);
-
     updateLabels();
 }
 
 void UiMainWindow::chanUnitV() {
     char str[512];
-
-    devParms.chanunit[devParms.activechannel] = 0;
-
+    devParms.chan[devParms.activechannel].unit = 0;
     snprintf(str, 512, "Channel %i units: Volt", devParms.activechannel + 1);
-
     statusLabel->setText(str);
-
     snprintf(str, 512, ":CHAN%i:UNIT VOLT", devParms.activechannel + 1);
     setCueCmd(str);
 }
 
 void UiMainWindow::chanUnitW() {
     char str[512];
-
-    devParms.chanunit[devParms.activechannel] = 1;
+    devParms.chan[devParms.activechannel].unit = 1;
 
     snprintf(str, 512, "Channel %i units: Watt", devParms.activechannel + 1);
 
@@ -2006,8 +1978,7 @@ void UiMainWindow::chanUnitW() {
 
 void UiMainWindow::chanUnitA() {
     char str[512];
-
-    devParms.chanunit[devParms.activechannel] = 2;
+    devParms.chan[devParms.activechannel].unit = 2;
 
     snprintf(str, 512, "Channel %i units: Ampere", devParms.activechannel + 1);
 
@@ -2019,8 +1990,7 @@ void UiMainWindow::chanUnitA() {
 
 void UiMainWindow::chanUnitU() {
     char str[512];
-
-    devParms.chanunit[devParms.activechannel] = 3;
+    devParms.chan[devParms.activechannel].unit = 3;
 
     snprintf(str, 512, "Channel %i units: Unknown", devParms.activechannel + 1);
 
@@ -2032,280 +2002,263 @@ void UiMainWindow::chanUnitU() {
 
 void UiMainWindow::chanProbeX001() {
     char str[512];
+    devParms.chan[devParms.activechannel].scale /= devParms.chan[devParms.activechannel].probe;
 
-    devParms.chanscale[devParms.activechannel] /= devParms.chanprobe[devParms.activechannel];
+    devParms.chan[devParms.activechannel].probe = 0.01;
 
-    devParms.chanprobe[devParms.activechannel] = 0.01;
-
-    devParms.chanscale[devParms.activechannel] *= devParms.chanprobe[devParms.activechannel];
+    devParms.chan[devParms.activechannel].scale *= devParms.chan[devParms.activechannel].probe;
 
     snprintf(str, 512, "Channel %i probe: 0.01X", devParms.activechannel + 1);
 
     statusLabel->setText(str);
 
-    snprintf(str, 512, ":CHAN%i:PROB %e", devParms.activechannel + 1, devParms.chanprobe[devParms.activechannel]);
+    snprintf(str, 512, ":CHAN%i:PROB %e", devParms.activechannel + 1, devParms.chan[devParms.activechannel].probe);
     setCueCmd(str);
 }
 
 void UiMainWindow::chanProbeX002() {
     char str[512];
+    devParms.chan[devParms.activechannel].scale /= devParms.chan[devParms.activechannel].probe;
 
-    devParms.chanscale[devParms.activechannel] /= devParms.chanprobe[devParms.activechannel];
+    devParms.chan[devParms.activechannel].probe = 0.02;
 
-    devParms.chanprobe[devParms.activechannel] = 0.02;
-
-    devParms.chanscale[devParms.activechannel] *= devParms.chanprobe[devParms.activechannel];
+    devParms.chan[devParms.activechannel].scale *= devParms.chan[devParms.activechannel].probe;
 
     snprintf(str, 512, "Channel %i probe: 0.02X", devParms.activechannel + 1);
 
     statusLabel->setText(str);
 
-    snprintf(str, 512, ":CHAN%i:PROB %e", devParms.activechannel + 1, devParms.chanprobe[devParms.activechannel]);
+    snprintf(str, 512, ":CHAN%i:PROB %e", devParms.activechannel + 1, devParms.chan[devParms.activechannel].probe);
     setCueCmd(str);
 }
 
 void UiMainWindow::chanProbeX005() {
     char str[512];
+    devParms.chan[devParms.activechannel].scale /= devParms.chan[devParms.activechannel].probe;
 
-    devParms.chanscale[devParms.activechannel] /= devParms.chanprobe[devParms.activechannel];
+    devParms.chan[devParms.activechannel].probe = 0.05;
 
-    devParms.chanprobe[devParms.activechannel] = 0.05;
-
-    devParms.chanscale[devParms.activechannel] *= devParms.chanprobe[devParms.activechannel];
+    devParms.chan[devParms.activechannel].scale *= devParms.chan[devParms.activechannel].probe;
 
     snprintf(str, 512, "Channel %i probe: 0.05X", devParms.activechannel + 1);
 
     statusLabel->setText(str);
 
-    snprintf(str, 512, ":CHAN%i:PROB %e", devParms.activechannel + 1, devParms.chanprobe[devParms.activechannel]);
+    snprintf(str, 512, ":CHAN%i:PROB %e", devParms.activechannel + 1, devParms.chan[devParms.activechannel].probe);
     setCueCmd(str);
 }
 
 void UiMainWindow::chanProbeX01() {
     char str[512];
+    devParms.chan[devParms.activechannel].scale /= devParms.chan[devParms.activechannel].probe;
 
-    devParms.chanscale[devParms.activechannel] /= devParms.chanprobe[devParms.activechannel];
+    devParms.chan[devParms.activechannel].probe = 0.1;
 
-    devParms.chanprobe[devParms.activechannel] = 0.1;
-
-    devParms.chanscale[devParms.activechannel] *= devParms.chanprobe[devParms.activechannel];
+    devParms.chan[devParms.activechannel].scale *= devParms.chan[devParms.activechannel].probe;
 
     snprintf(str, 512, "Channel %i probe: 0.1X", devParms.activechannel + 1);
 
     statusLabel->setText(str);
 
-    snprintf(str, 512, ":CHAN%i:PROB %e", devParms.activechannel + 1, devParms.chanprobe[devParms.activechannel]);
+    snprintf(str, 512, ":CHAN%i:PROB %e", devParms.activechannel + 1, devParms.chan[devParms.activechannel].probe);
     setCueCmd(str);
 }
 
 void UiMainWindow::chanProbeX02() {
     char str[512];
+    devParms.chan[devParms.activechannel].scale /= devParms.chan[devParms.activechannel].probe;
 
-    devParms.chanscale[devParms.activechannel] /= devParms.chanprobe[devParms.activechannel];
+    devParms.chan[devParms.activechannel].probe = 0.2;
 
-    devParms.chanprobe[devParms.activechannel] = 0.2;
-
-    devParms.chanscale[devParms.activechannel] *= devParms.chanprobe[devParms.activechannel];
+    devParms.chan[devParms.activechannel].scale *= devParms.chan[devParms.activechannel].probe;
 
     snprintf(str, 512, "Channel %i probe: 0.2X", devParms.activechannel + 1);
 
     statusLabel->setText(str);
 
-    snprintf(str, 512, ":CHAN%i:PROB %e", devParms.activechannel + 1, devParms.chanprobe[devParms.activechannel]);
+    snprintf(str, 512, ":CHAN%i:PROB %e", devParms.activechannel + 1, devParms.chan[devParms.activechannel].probe);
     setCueCmd(str);
 }
 
 void UiMainWindow::chanProbeX05() {
     char str[512];
+    devParms.chan[devParms.activechannel].scale /= devParms.chan[devParms.activechannel].probe;
 
-    devParms.chanscale[devParms.activechannel] /= devParms.chanprobe[devParms.activechannel];
+    devParms.chan[devParms.activechannel].probe = 0.5;
 
-    devParms.chanprobe[devParms.activechannel] = 0.5;
-
-    devParms.chanscale[devParms.activechannel] *= devParms.chanprobe[devParms.activechannel];
+    devParms.chan[devParms.activechannel].scale *= devParms.chan[devParms.activechannel].probe;
 
     snprintf(str, 512, "Channel %i probe: 0.5X", devParms.activechannel + 1);
 
     statusLabel->setText(str);
 
-    snprintf(str, 512, ":CHAN%i:PROB %e", devParms.activechannel + 1, devParms.chanprobe[devParms.activechannel]);
+    snprintf(str, 512, ":CHAN%i:PROB %e", devParms.activechannel + 1, devParms.chan[devParms.activechannel].probe);
     setCueCmd(str);
 }
 
 void UiMainWindow::chanProbeX1() {
     char str[512];
+    devParms.chan[devParms.activechannel].scale /= devParms.chan[devParms.activechannel].probe;
 
-    devParms.chanscale[devParms.activechannel] /= devParms.chanprobe[devParms.activechannel];
+    devParms.chan[devParms.activechannel].probe = 1;
 
-    devParms.chanprobe[devParms.activechannel] = 1;
-
-    devParms.chanscale[devParms.activechannel] *= devParms.chanprobe[devParms.activechannel];
+    devParms.chan[devParms.activechannel].scale *= devParms.chan[devParms.activechannel].probe;
 
     snprintf(str, 512, "Channel %i probe: 1X", devParms.activechannel + 1);
 
     statusLabel->setText(str);
 
-    snprintf(str, 512, ":CHAN%i:PROB %e", devParms.activechannel + 1, devParms.chanprobe[devParms.activechannel]);
+    snprintf(str, 512, ":CHAN%i:PROB %e", devParms.activechannel + 1, devParms.chan[devParms.activechannel].probe);
     setCueCmd(str);
 }
 
 void UiMainWindow::chanProbeX2() {
     char str[512];
+    devParms.chan[devParms.activechannel].scale /= devParms.chan[devParms.activechannel].probe;
 
-    devParms.chanscale[devParms.activechannel] /= devParms.chanprobe[devParms.activechannel];
+    devParms.chan[devParms.activechannel].probe = 2;
 
-    devParms.chanprobe[devParms.activechannel] = 2;
-
-    devParms.chanscale[devParms.activechannel] *= devParms.chanprobe[devParms.activechannel];
+    devParms.chan[devParms.activechannel].scale *= devParms.chan[devParms.activechannel].probe;
 
     snprintf(str, 512, "Channel %i probe: 2X", devParms.activechannel + 1);
 
     statusLabel->setText(str);
 
-    snprintf(str, 512, ":CHAN%i:PROB %e", devParms.activechannel + 1, devParms.chanprobe[devParms.activechannel]);
+    snprintf(str, 512, ":CHAN%i:PROB %e", devParms.activechannel + 1, devParms.chan[devParms.activechannel].probe);
     setCueCmd(str);
 }
 
 void UiMainWindow::chanProbeX5() {
     char str[512];
+    devParms.chan[devParms.activechannel].scale /= devParms.chan[devParms.activechannel].probe;
 
-    devParms.chanscale[devParms.activechannel] /= devParms.chanprobe[devParms.activechannel];
+    devParms.chan[devParms.activechannel].probe = 5;
 
-    devParms.chanprobe[devParms.activechannel] = 5;
-
-    devParms.chanscale[devParms.activechannel] *= devParms.chanprobe[devParms.activechannel];
+    devParms.chan[devParms.activechannel].scale *= devParms.chan[devParms.activechannel].probe;
 
     snprintf(str, 512, "Channel %i probe: 5X", devParms.activechannel + 1);
 
     statusLabel->setText(str);
 
-    snprintf(str, 512, ":CHAN%i:PROB %e", devParms.activechannel + 1, devParms.chanprobe[devParms.activechannel]);
+    snprintf(str, 512, ":CHAN%i:PROB %e", devParms.activechannel + 1, devParms.chan[devParms.activechannel].probe);
     setCueCmd(str);
 }
 
 void UiMainWindow::chanProbeX10() {
     char str[512];
+    devParms.chan[devParms.activechannel].scale /= devParms.chan[devParms.activechannel].probe;
 
-    devParms.chanscale[devParms.activechannel] /= devParms.chanprobe[devParms.activechannel];
+    devParms.chan[devParms.activechannel].probe = 10;
 
-    devParms.chanprobe[devParms.activechannel] = 10;
-
-    devParms.chanscale[devParms.activechannel] *= devParms.chanprobe[devParms.activechannel];
+    devParms.chan[devParms.activechannel].scale *= devParms.chan[devParms.activechannel].probe;
 
     snprintf(str, 512, "Channel %i probe: 10X", devParms.activechannel + 1);
 
     statusLabel->setText(str);
 
-    snprintf(str, 512, ":CHAN%i:PROB %e", devParms.activechannel + 1, devParms.chanprobe[devParms.activechannel]);
+    snprintf(str, 512, ":CHAN%i:PROB %e", devParms.activechannel + 1, devParms.chan[devParms.activechannel].probe);
     setCueCmd(str);
 }
 
 void UiMainWindow::chanProbeX20() {
     char str[512];
+    devParms.chan[devParms.activechannel].scale /= devParms.chan[devParms.activechannel].probe;
 
-    devParms.chanscale[devParms.activechannel] /= devParms.chanprobe[devParms.activechannel];
+    devParms.chan[devParms.activechannel].probe = 20;
 
-    devParms.chanprobe[devParms.activechannel] = 20;
-
-    devParms.chanscale[devParms.activechannel] *= devParms.chanprobe[devParms.activechannel];
+    devParms.chan[devParms.activechannel].scale *= devParms.chan[devParms.activechannel].probe;
 
     snprintf(str, 512, "Channel %i probe: 20X", devParms.activechannel + 1);
 
     statusLabel->setText(str);
 
-    snprintf(str, 512, ":CHAN%i:PROB %e", devParms.activechannel + 1, devParms.chanprobe[devParms.activechannel]);
+    snprintf(str, 512, ":CHAN%i:PROB %e", devParms.activechannel + 1, devParms.chan[devParms.activechannel].probe);
     setCueCmd(str);
 }
 
 void UiMainWindow::chanProbeX50() {
     char str[512];
+    devParms.chan[devParms.activechannel].scale /= devParms.chan[devParms.activechannel].probe;
 
-    devParms.chanscale[devParms.activechannel] /= devParms.chanprobe[devParms.activechannel];
+    devParms.chan[devParms.activechannel].probe = 50;
 
-    devParms.chanprobe[devParms.activechannel] = 50;
-
-    devParms.chanscale[devParms.activechannel] *= devParms.chanprobe[devParms.activechannel];
+    devParms.chan[devParms.activechannel].scale *= devParms.chan[devParms.activechannel].probe;
 
     snprintf(str, 512, "Channel %i probe: 50X", devParms.activechannel + 1);
 
     statusLabel->setText(str);
 
-    snprintf(str, 512, ":CHAN%i:PROB %e", devParms.activechannel + 1, devParms.chanprobe[devParms.activechannel]);
+    snprintf(str, 512, ":CHAN%i:PROB %e", devParms.activechannel + 1, devParms.chan[devParms.activechannel].probe);
     setCueCmd(str);
 }
 
 void UiMainWindow::chanProbeX100() {
     char str[512];
+    devParms.chan[devParms.activechannel].scale /= devParms.chan[devParms.activechannel].probe;
 
-    devParms.chanscale[devParms.activechannel] /= devParms.chanprobe[devParms.activechannel];
+    devParms.chan[devParms.activechannel].probe = 100;
 
-    devParms.chanprobe[devParms.activechannel] = 100;
-
-    devParms.chanscale[devParms.activechannel] *= devParms.chanprobe[devParms.activechannel];
+    devParms.chan[devParms.activechannel].scale *= devParms.chan[devParms.activechannel].probe;
 
     snprintf(str, 512, "Channel %i probe: 100X", devParms.activechannel + 1);
 
     statusLabel->setText(str);
 
-    snprintf(str, 512, ":CHAN%i:PROB %e", devParms.activechannel + 1, devParms.chanprobe[devParms.activechannel]);
+    snprintf(str, 512, ":CHAN%i:PROB %e", devParms.activechannel + 1, devParms.chan[devParms.activechannel].probe);
     setCueCmd(str);
 }
 
 void UiMainWindow::chanProbeX200() {
     char str[512];
+    devParms.chan[devParms.activechannel].scale /= devParms.chan[devParms.activechannel].probe;
 
-    devParms.chanscale[devParms.activechannel] /= devParms.chanprobe[devParms.activechannel];
+    devParms.chan[devParms.activechannel].probe = 200;
 
-    devParms.chanprobe[devParms.activechannel] = 200;
-
-    devParms.chanscale[devParms.activechannel] *= devParms.chanprobe[devParms.activechannel];
+    devParms.chan[devParms.activechannel].scale *= devParms.chan[devParms.activechannel].probe;
 
     snprintf(str, 512, "Channel %i probe: 200X", devParms.activechannel + 1);
 
     statusLabel->setText(str);
 
-    snprintf(str, 512, ":CHAN%i:PROB %e", devParms.activechannel + 1, devParms.chanprobe[devParms.activechannel]);
+    snprintf(str, 512, ":CHAN%i:PROB %e", devParms.activechannel + 1, devParms.chan[devParms.activechannel].probe);
     setCueCmd(str);
 }
 
 void UiMainWindow::chanProbeX500() {
     char str[512];
+    devParms.chan[devParms.activechannel].scale /= devParms.chan[devParms.activechannel].probe;
 
-    devParms.chanscale[devParms.activechannel] /= devParms.chanprobe[devParms.activechannel];
+    devParms.chan[devParms.activechannel].probe = 500;
 
-    devParms.chanprobe[devParms.activechannel] = 500;
-
-    devParms.chanscale[devParms.activechannel] *= devParms.chanprobe[devParms.activechannel];
+    devParms.chan[devParms.activechannel].scale *= devParms.chan[devParms.activechannel].probe;
 
     snprintf(str, 512, "Channel %i probe: 500X", devParms.activechannel + 1);
 
     statusLabel->setText(str);
 
-    snprintf(str, 512, ":CHAN%i:PROB %e", devParms.activechannel + 1, devParms.chanprobe[devParms.activechannel]);
+    snprintf(str, 512, ":CHAN%i:PROB %e", devParms.activechannel + 1, devParms.chan[devParms.activechannel].probe);
     setCueCmd(str);
 }
 
 void UiMainWindow::chanProbeX1000() {
     char str[512];
+    devParms.chan[devParms.activechannel].scale /= devParms.chan[devParms.activechannel].probe;
 
-    devParms.chanscale[devParms.activechannel] /= devParms.chanprobe[devParms.activechannel];
+    devParms.chan[devParms.activechannel].probe = 1000;
 
-    devParms.chanprobe[devParms.activechannel] = 1000;
-
-    devParms.chanscale[devParms.activechannel] *= devParms.chanprobe[devParms.activechannel];
+    devParms.chan[devParms.activechannel].scale *= devParms.chan[devParms.activechannel].probe;
 
     snprintf(str, 512, "Channel %i probe: 1000X", devParms.activechannel + 1);
 
     statusLabel->setText(str);
 
-    snprintf(str, 512, ":CHAN%i:PROB %e", devParms.activechannel + 1, devParms.chanprobe[devParms.activechannel]);
+    snprintf(str, 512, ":CHAN%i:PROB %e", devParms.activechannel + 1, devParms.chan[devParms.activechannel].probe);
     setCueCmd(str);
 }
 
 void UiMainWindow::chanBwlOff() {
     char str[512];
-
-    devParms.chanbwlimit[devParms.activechannel] = 0;
+    devParms.chan[devParms.activechannel].bwlimit = 0;
 
     snprintf(str, 512, "Channel %i bandwidth limit: Off", devParms.activechannel + 1);
 
@@ -2319,8 +2272,7 @@ void UiMainWindow::chanBwlOff() {
 
 void UiMainWindow::chanBwl20MHz() {
     char str[512];
-
-    devParms.chanbwlimit[devParms.activechannel] = 20;
+    devParms.chan[devParms.activechannel].bwlimit = 20;
 
     snprintf(str, 512, "Channel %i bandwidth limit: 20MHz", devParms.activechannel + 1);
 
@@ -2334,8 +2286,7 @@ void UiMainWindow::chanBwl20MHz() {
 
 void UiMainWindow::chanBwl100MHz() {
     char str[512];
-
-    devParms.chanbwlimit[devParms.activechannel] = 100;
+    devParms.chan[devParms.activechannel].bwlimit = 100;
 
     snprintf(str, 512, "Channel %i bandwidth limit: 100MHz", devParms.activechannel + 1);
 
@@ -2349,8 +2300,7 @@ void UiMainWindow::chanBwl100MHz() {
 
 void UiMainWindow::chanBwl200MHz() {
     char str[512];
-
-    devParms.chanbwlimit[devParms.activechannel] = 200;
+    devParms.chan[devParms.activechannel].bwlimit = 200;
 
     snprintf(str, 512, "Channel %i bandwidth limit: 200MHz", devParms.activechannel + 1);
 
@@ -2364,8 +2314,7 @@ void UiMainWindow::chanBwl200MHz() {
 
 void UiMainWindow::chanBwl250MHz() {
     char str[512];
-
-    devParms.chanbwlimit[devParms.activechannel] = 250;
+    devParms.chan[devParms.activechannel].bwlimit = 250;
 
     snprintf(str, 512, "Channel %i bandwidth limit: 250MHz", devParms.activechannel + 1);
 
@@ -2381,17 +2330,16 @@ void UiMainWindow::updateLabels() {
     int chn;
 
     char str[512];
-
     for(chn = 0; chn < devParms.channelCnt; chn++) {
         str[0] = 0;
 
-        if(devParms.chancoupling[chn] == 2)
+        if(devParms.chan[chn].coupling == Coup::AC)
             strlcat(str, "AC", 512);
 
-        if(devParms.chanimpedance[chn])
+        if(devParms.chan[chn].impedance)
             strlcat(str, " 50", 512);
 
-        if(devParms.chanbwlimit[chn])
+        if(devParms.chan[chn].bwlimit)
             strlcat(str, " BW", 512);
 
         switch(chn) {
@@ -2413,11 +2361,10 @@ void UiMainWindow::updateLabels() {
 
 void UiMainWindow::chanInvertOn() {
     char str[512];
-
-    if(!devParms.chaninvert[devParms.activechannel])
+    if(!devParms.chan[devParms.activechannel].invert)
         devParms.triggeredgelevel[devParms.activechannel] *= -1;
 
-    devParms.chaninvert[devParms.activechannel] = 1;
+    devParms.chan[devParms.activechannel].invert = 1;
 
     snprintf(str, 512, "Channel %i inverted: On", devParms.activechannel + 1);
 
@@ -2429,11 +2376,10 @@ void UiMainWindow::chanInvertOn() {
 
 void UiMainWindow::chanInvertOff() {
     char str[512];
-
-    if(devParms.chaninvert[devParms.activechannel])
+    if(devParms.chan[devParms.activechannel].invert)
         devParms.triggeredgelevel[devParms.activechannel] *= -1;
 
-    devParms.chaninvert[devParms.activechannel] = 0;
+    devParms.chan[devParms.activechannel].invert = 0;
 
     snprintf(str, 512, "Channel %i inverted: Off", devParms.activechannel + 1);
 
@@ -2452,23 +2398,22 @@ void UiMainWindow::vertOffsetDialClicked(QPoint) {
     int chn;
 
     char str[512];
-
     if(devParms.activechannel < 0)
         return;
 
     chn = devParms.activechannel;
 
-    devParms.chanoffset[chn] = 0;
+    devParms.chan[chn].offset = 0;
 
     snprintf(str, 512, "Channel %i offset: ", chn + 1);
 
-    convertToMetricSuffix(str + strlen(str), devParms.chanoffset[chn], 2, 512 - strlen(str));
+    convertToMetricSuffix(str + strlen(str), devParms.chan[chn].offset, 2, 512 - strlen(str));
 
-    strlcat(str, devParms.chanunitstr[devParms.chanunit[chn]], 512);
+    strlcat(str, devParms.chan[devParms.chan[chn].unit].unitstr, 512);
 
     statusLabel->setText(str);
 
-    snprintf(str, 512, ":CHAN%i:OFFS %e", chn + 1, devParms.chanoffset[chn]);
+    snprintf(str, 512, ":CHAN%i:OFFS %e", chn + 1, devParms.chan[chn].offset);
     setCueCmd(str);
 }
 
@@ -2585,7 +2530,6 @@ void UiMainWindow::horizontalDelayedToggle() {
 
 void UiMainWindow::horPosDialClicked(QPoint) {
     char str[512];
-
     if(devParms.timebasedelayenable) {
         devParms.timebasedelayoffset = devParms.timebaseoffset;
 
@@ -2714,7 +2658,6 @@ void UiMainWindow::trigModeButtonClicked() {
 void UiMainWindow::trigMenuButtonClicked() {
 
     char str[512];
-
     QMenu menu,
         submenusource,
         submenuslope,
@@ -2819,114 +2762,95 @@ void UiMainWindow::trigMenuButtonClicked() {
 }
 
 void UiMainWindow::triggerSourceCh1() {
-    devParms.triggeredgesource = 0;
-
+    devParms.triggeredgesource = CHAN::CH_AN_1;
     statusLabel->setText("Trigger source channel 1");
     setCueCmd(":TRIG:EDG:SOUR CHAN1");
 }
 
 void UiMainWindow::triggerSourceCh2() {
-    devParms.triggeredgesource = 1;
-
+    devParms.triggeredgesource = CHAN::CH_AN_2;
     statusLabel->setText("Trigger source channel 2");
     setCueCmd(":TRIG:EDG:SOUR CHAN2");
 }
 
 void UiMainWindow::triggerSourceCh3() {
-    devParms.triggeredgesource = 2;
-
+    devParms.triggeredgesource = CHAN::CH_AN_3;
     statusLabel->setText("Trigger source channel 3");
     setCueCmd(":TRIG:EDG:SOUR CHAN3");
 }
 
 void UiMainWindow::triggerSourceCh4() {
-    devParms.triggeredgesource = 3;
-
+    devParms.triggeredgesource = CHAN::CH_AN_4;
     statusLabel->setText("Trigger source channel 4");
     setCueCmd(":TRIG:EDG:SOUR CHAN4");
 }
 
 void UiMainWindow::triggerSourceExt() {
-    devParms.triggeredgesource = 4;
-
+    devParms.triggeredgesource = CHAN::EXT;
     statusLabel->setText("Trigger source extern");
     setCueCmd(":TRIG:EDG:SOUR EXT");
 }
 
 void UiMainWindow::triggerSourceExt5() {
-    devParms.triggeredgesource = 5;
-
+    devParms.triggeredgesource = CHAN::EXT5;
     statusLabel->setText("Trigger source extern 5");
     setCueCmd(":TRIG:EDG:SOUR EXT5");
 }
 
 void UiMainWindow::triggerSourceAcl() {
-    devParms.triggeredgesource = 6;
-
+    devParms.triggeredgesource = CHAN::ACL;
     statusLabel->setText("Trigger source AC powerline");
-
     if(devParms.modelSerie != 1) setCueCmd(":TRIG:EDG:SOUR ACL");
     else setCueCmd(":TRIG:EDG:SOUR AC");
 }
 
 void UiMainWindow::triggerCouplingAc() {
     devParms.triggercoupling = 0;
-
     statusLabel->setText("Trigger coupling AC");
     setCueCmd(":TRIG:COUP AC");
 }
 
 void UiMainWindow::triggerCouplingDc() {
     devParms.triggercoupling = 1;
-
     statusLabel->setText("Trigger coupling DC");
     setCueCmd(":TRIG:COUP DC");
 }
 
 void UiMainWindow::triggerCouplingLfReject() {
     devParms.triggercoupling = 2;
-
     statusLabel->setText("Trigger LF reject");
     setCueCmd(":TRIG:COUP LFR");
 }
 
 void UiMainWindow::triggerCouplingHfReject() {
     devParms.triggercoupling = 3;
-
     statusLabel->setText("Trigger HF reject");
     setCueCmd(":TRIG:COUP HFR");
 }
 
 void UiMainWindow::triggerSlopePos() {
     devParms.triggeredgeslope = 0;
-
     statusLabel->setText("Trigger edge positive");
     setCueCmd(":TRIG:EDG:SLOP POS");
 }
 
 void UiMainWindow::triggerSlopeNeg() {
     devParms.triggeredgeslope = 1;
-
     statusLabel->setText("Trigger edge negative");
     setCueCmd(":TRIG:EDG:SLOP NEG");
 }
 
 void UiMainWindow::triggerSlopeRfal() {
     devParms.triggeredgeslope = 2;
-
     statusLabel->setText("Trigger edge positive /negative");
     setCueCmd(":TRIG:EDG:SLOP RFAL");
 }
 
 void UiMainWindow::triggerSettingHoldOff() {
     navDialFunc = NAV_DIAL_FUNC_HOLDOFF;
-
     adjDialFunc = ADJ_DIAL_FUNC_HOLDOFF;
-
     adjDialLabel->setText("Holdoff");
-
     adjDialLabel->setStyleSheet("background: #66FF99; font: 7pt;");
-
     adjdialTimer->start(ADJDIAL_TIMER_IVAL_1);
 }
 
@@ -2938,23 +2862,16 @@ void UiMainWindow::trigForceButtonClicked() {
 void UiMainWindow::trig50pctButtonClicked() {
     statusLabel->setText("Trigger 50%");
     setCueCmd(":TLHA");
-
     waveForm->setTrigLineVisible();
 }
 
 void UiMainWindow::trigAdjustDialClicked(QPoint) {
     char str[512];
-
     devParms.triggeredgelevel[devParms.triggeredgesource] = 0;
-
     strlcpy(str, "Trigger level: ", 512);
-
     convertToMetricSuffix(str + strlen(str), devParms.triggeredgelevel[devParms.triggeredgesource], 2, 512 - strlen(str));
-
-    strlcat(str, devParms.chanunitstr[devParms.chanunit[devParms.triggeredgesource]], 512);
-
+    strlcat(str, devParms.chan[devParms.chan[devParms.triggeredgesource].unit].unitstr, 512);
     statusLabel->setText(str);
-
     snprintf(str, 512, ":TRIG:EDG:LEV %e", devParms.triggeredgelevel[devParms.triggeredgesource]);
     setCueCmd(str);
 }
@@ -3008,7 +2925,6 @@ void UiMainWindow::toggleFftSplit() {
 
 void UiMainWindow::toggleFftUnit() {
     char str[512];
-
     if(devParms.mathFftUnit == 1) {
         devParms.fftVScale = 1.0;
 
@@ -3116,7 +3032,6 @@ void UiMainWindow::selectFftHzdiv200() {
 
 void UiMainWindow::setFftHzdiv(double val) {
     char str[512];
-
     if(devParms.timebasedelayenable)
         devParms.mathFftHscale = (100.0 / devParms.timebasedelayscale) / val;
     else
@@ -3139,7 +3054,6 @@ void UiMainWindow::setFftHzdiv(double val) {
 
 void UiMainWindow::selectFftCtr5() {
     char str[512];
-
     if(devParms.modelSerie != 1)
         snprintf(str, 512, ":CALC:FFT:HCEN %e", devParms.mathFftHscale * 5.0);
     else
@@ -3159,7 +3073,6 @@ void UiMainWindow::selectFftCtr5() {
 
 void UiMainWindow::selectFftCtr6() {
     char str[512];
-
     if(devParms.modelSerie != 1)
         snprintf(str, 512, ":CALC:FFT:HCEN %e", devParms.mathFftHscale * 6.0);
     else
@@ -3179,7 +3092,6 @@ void UiMainWindow::selectFftCtr6() {
 
 void UiMainWindow::selectFftCtr7() {
     char str[512];
-
     if(devParms.modelSerie != 1)
         snprintf(str, 512, ":CALC:FFT:HCEN %e", devParms.mathFftHscale * 7.0);
     else
@@ -3199,7 +3111,6 @@ void UiMainWindow::selectFftCtr7() {
 
 void UiMainWindow::selectFftCtr8() {
     char str[512];
-
     if(devParms.modelSerie != 1)
         snprintf(str, 512, ":CALC:FFT:HCEN %e", devParms.mathFftHscale * 8.0);
     else
@@ -3219,7 +3130,6 @@ void UiMainWindow::selectFftCtr8() {
 
 void UiMainWindow::selectFftCtr9() {
     char str[512];
-
     if(devParms.modelSerie != 1)
         snprintf(str, 512, ":CALC:FFT:HCEN %e", devParms.mathFftHscale * 9.0);
     else
@@ -3239,7 +3149,6 @@ void UiMainWindow::selectFftCtr9() {
 
 void UiMainWindow::selectFftCtr10() {
     char str[512];
-
     if(devParms.modelSerie != 1)
         snprintf(str, 512, ":CALC:FFT:HCEN %e", devParms.mathFftHscale * 10.0);
     else
@@ -3259,7 +3168,6 @@ void UiMainWindow::selectFftCtr10() {
 
 void UiMainWindow::selectFftCtr11() {
     char str[512];
-
     if(devParms.modelSerie != 1)
         snprintf(str, 512, ":CALC:FFT:HCEN %e", devParms.mathFftHscale * 11.0);
     else
@@ -3279,7 +3187,6 @@ void UiMainWindow::selectFftCtr11() {
 
 void UiMainWindow::selectFftCtr12() {
     char str[512];
-
     if(devParms.modelSerie != 1)
         snprintf(str, 512, ":CALC:FFT:HCEN %e", devParms.mathFftHscale * 12.0);
     else
@@ -3329,7 +3236,6 @@ void UiMainWindow::selectFftVScale20() {
 
 void UiMainWindow::setFftVScale() {
     char str[512];
-
     if(device == nullptr)
         return;
 
@@ -3350,7 +3256,7 @@ void UiMainWindow::setFftVScale() {
             snprintf(str, 512, ":CALC:FFT:VSC %e", devParms.fftVScale);
             setCueCmd(str);
         } else {
-            snprintf(str, 512, ":CALC:FFT:VSC %e", devParms.fftVScale / devParms.chanscale[devParms.mathFftSrc]);
+            snprintf(str, 512, ":CALC:FFT:VSC %e", devParms.fftVScale / devParms.chan[devParms.mathFftSrc].scale);
             setCueCmd(str);
         }
     } else {
@@ -3429,7 +3335,6 @@ void UiMainWindow::selectFftVOffsetm4() {
 
 void UiMainWindow::setFftVOffset() {
     char str[512];
-
     if(devParms.modelSerie != 1) {
         snprintf(str, 512, ":CALC:FFT:VOFF %e", devParms.fftVOffset);
         setCueCmd(str);

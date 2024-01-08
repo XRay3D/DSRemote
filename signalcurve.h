@@ -110,13 +110,15 @@ private:
     int h;
     int oldW;
     int updatesEnabled;
-    int chanArrowMoving[MAX_CHNS];
+    struct Channel {
+        int ArrowMoving;
+        int ArrowPos;
+        int TmpOldYPixelOffset;
+        int TmpYPixelOffset;
+    } chan[MAX_CHNS];
     int trigLevelArrowMoving;
     int trigPosArrowMoving;
     int useMoveEvents;
-    int chanArrowPos[MAX_CHNS];
-    int chanTmpYPixelOffset[MAX_CHNS];
-    int chanTmpOldYPixelOffset[MAX_CHNS];
     int trigLevelArrowPos;
     int trigPosArrowPos;
     int trigStatFlash;

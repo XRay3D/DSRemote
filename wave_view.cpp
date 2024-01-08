@@ -199,16 +199,16 @@ void WaveCurve::paintEvent(QPaintEvent*) {
     drawTrigCenterArrow(painter, curve_w / 2, 0);
 
     for(chn = 0; chn < devParms->channelCnt; chn++) {
-        if(!devParms->chanDisplay[chn])
+        if(!devParms->chan[chn].Display)
             continue;
 
         v_sense = ((double)curve_h
-                      / ((devParms->chanscale[chn] * devParms->vertDivisions) / devParms->yinc[chn]))
+                      / ((devParms->chan[chn].scale * devParms->vertDivisions) / devParms->chan[chn].yinc))
             / -32.0;
 
         chanArrowPos[chn] = (curve_h / 2)
-            - (devParms->chanoffset[chn]
-                / ((devParms->chanscale[chn] * devParms->vertDivisions) / curve_h));
+            - (devParms->chan[chn].offset
+                / ((devParms->chan[chn].scale * devParms->vertDivisions) / curve_h));
 
         if(chanArrowPos[chn] < 0) {
             chanArrowPos[chn] = -1;
@@ -251,17 +251,17 @@ void WaveCurve::paintEvent(QPaintEvent*) {
         //     }
 
         for(chn = 0; chn < devParms->channelCnt; chn++) {
-            if(!devParms->chanDisplay[chn])
+            if(!devParms->chan[chn].Display)
                 continue;
 
             v_sense = ((double)curve_h
-                          / ((devParms->chanscale[chn] * devParms->vertDivisions)
-                              / devParms->yinc[chn]))
+                          / ((devParms->chan[chn].scale * devParms->vertDivisions)
+                              / devParms->chan[chn].yinc))
                 / -32.0;
 
             h_trace_offset = curve_h / 2;
 
-            h_trace_offset += (devParms->yor[chn] * v_sense * 32.0);
+            h_trace_offset += (devParms->chan[chn].yor * v_sense * 32.0);
 
             painter->setPen(QPen(QBrush(SignalColor[chn], Qt::SolidPattern),
                 traceWidth,
@@ -321,8 +321,8 @@ void WaveCurve::paintEvent(QPaintEvent*) {
     if(devParms->triggeredgesource < 4) {
         trigLevelArrowPos = (curve_h / 2)
             - ((devParms->triggeredgelevel[devParms->triggeredgesource]
-                   + devParms->chanoffset[devParms->triggeredgesource])
-                / ((devParms->chanscale[devParms->triggeredgesource]
+                   + devParms->chan[devParms->triggeredgesource].offset)
+                / ((devParms->chan[devParms->triggeredgesource].scale
                        * devParms->vertDivisions)
                     / curve_h));
 
@@ -526,7 +526,7 @@ void WaveCurve::drawTopLabels(QPainter* painter) {
 
     convertToMetricSuffix(str, devParms->triggeredgelevel[devParms->triggeredgesource], 2, 512);
 
-    strlcat(str, devParms->chanunitstr[devParms->chanunit[devParms->triggeredgesource]], 512);
+    strlcat(str, devParms->chan[devParms->chan[devParms->triggeredgesource].unit].unitstr, 512);
 
     if(devParms->triggeredgesource < 4) {
         painter->setPen(SignalColor[devParms->triggeredgesource]);
@@ -1583,14 +1583,14 @@ void WaveCurve::drawChanLabel(QPainter* painter, int xpos, int ypos, int chn) {
     str1[0] = '1' + chn;
     str1[1] = 0;
 
-    convertToMetricSuffix(str2, devParms->chanscale[chn], 2, 512);
+    convertToMetricSuffix(str2, devParms->chan[chn].scale, 2, 512);
 
-    strlcat(str2, devParms->chanunitstr[devParms->chanunit[chn]], 512);
+    strlcat(str2, devParms->chan[devParms->chan[chn].unit].unitstr, 512);
 
-    if(devParms->chanbwlimit[chn])
+    if(devParms->chan[chn].bwlimit)
         strlcat(str2, " B", 512);
 
-    if(devParms->chanDisplay[chn]) {
+    if(devParms->chan[chn].Display) {
         path.addRoundedRect(xpos, ypos, 20, 20, 3, 3);
 
         path.addRoundedRect(xpos + 25, ypos, 85, 20, 3, 3);
@@ -1601,28 +1601,28 @@ void WaveCurve::drawChanLabel(QPainter* painter, int xpos, int ypos, int chn) {
 
         painter->drawText(xpos + 6, ypos + 15, str1);
 
-        if(devParms->chaninvert[chn])
+        if(devParms->chan[chn].invert)
             painter->drawLine(xpos + 6, ypos + 3, xpos + 14, ypos + 3);
 
         painter->drawText(xpos + 35, ypos + 1, 90, 20, Qt::AlignCenter, str2);
 
-        if(devParms->chancoupling[chn] == 0) {
-            painter->drawLine(xpos + 33, ypos + 6, xpos + 33, ypos + 10);
-
-            painter->drawLine(xpos + 28, ypos + 10, xpos + 38, ypos + 10);
-
-            painter->drawLine(xpos + 30, ypos + 12, xpos + 36, ypos + 12);
-
-            painter->drawLine(xpos + 32, ypos + 14, xpos + 34, ypos + 14);
-        } else if(devParms->chancoupling[chn] == 1) {
-            painter->drawLine(xpos + 28, ypos + 8, xpos + 38, ypos + 8);
-
-            painter->drawLine(xpos + 28, ypos + 12, xpos + 30, ypos + 12);
-
-            painter->drawLine(xpos + 32, ypos + 12, xpos + 34, ypos + 12);
-
-            painter->drawLine(xpos + 36, ypos + 12, xpos + 38, ypos + 12);
-        } else if(devParms->chancoupling[chn] == 2) {
+        if(devParms->chan[chn].coupling == Coup::GND) {
+            QLine lines[]{
+                {xpos + 33, ypos + 6,  xpos + 33, ypos + 10},
+                {xpos + 28, ypos + 10, xpos + 38, ypos + 10},
+                {xpos + 30, ypos + 12, xpos + 36, ypos + 12},
+                {xpos + 32, ypos + 14, xpos + 34, ypos + 14},
+            };
+            painter->drawLines(lines, 4);
+        } else if(devParms->chan[chn].coupling == Coup::DC) {
+            QLine lines[]{
+                {xpos + 28, ypos + 8,  xpos + 38, ypos + 8 },
+                {xpos + 28, ypos + 12, xpos + 30, ypos + 12},
+                {xpos + 32, ypos + 12, xpos + 34, ypos + 12},
+                {xpos + 36, ypos + 12, xpos + 38, ypos + 12},
+            };
+            painter->drawLines(lines, 4);
+        } else if(devParms->chan[chn].coupling == Coup::AC) {
             painter->drawArc(xpos + 30, ypos + 8, 5, 5, 10 * 16, 160 * 16);
 
             painter->drawArc(xpos + 35, ypos + 8, 5, 5, -10 * 16, -160 * 16);
@@ -1640,28 +1640,27 @@ void WaveCurve::drawChanLabel(QPainter* painter, int xpos, int ypos, int chn) {
 
         painter->drawText(xpos + 30, ypos + 1, 85, 20, Qt::AlignCenter, str2);
 
-        if(devParms->chanbwlimit[chn])
+        if(devParms->chan[chn].bwlimit)
             painter->drawText(xpos + 90, ypos + 1, 20, 20, Qt::AlignCenter, "B");
 
-        if(devParms->chancoupling[chn] == 0) {
-            painter->drawLine(xpos + 33, ypos + 6, xpos + 33, ypos + 10);
-
-            painter->drawLine(xpos + 28, ypos + 10, xpos + 38, ypos + 10);
-
-            painter->drawLine(xpos + 30, ypos + 12, xpos + 36, ypos + 12);
-
-            painter->drawLine(xpos + 32, ypos + 14, xpos + 34, ypos + 14);
-        } else if(devParms->chancoupling[chn] == 1) {
-            painter->drawLine(xpos + 28, ypos + 8, xpos + 38, ypos + 8);
-
-            painter->drawLine(xpos + 28, ypos + 12, xpos + 30, ypos + 12);
-
-            painter->drawLine(xpos + 32, ypos + 12, xpos + 34, ypos + 12);
-
-            painter->drawLine(xpos + 36, ypos + 12, xpos + 38, ypos + 12);
-        } else if(devParms->chancoupling[chn] == 2) {
+        if(devParms->chan[chn].coupling == Coup::GND) {
+            QLine lines[]{
+                {xpos + 33, ypos + 6,  xpos + 33, ypos + 10},
+                {xpos + 28, ypos + 10, xpos + 38, ypos + 10},
+                {xpos + 30, ypos + 12, xpos + 36, ypos + 12},
+                {xpos + 32, ypos + 14, xpos + 34, ypos + 14},
+            };
+            painter->drawLines(lines, 4);
+        } else if(devParms->chan[chn].coupling == Coup::DC) {
+            QLine lines[]{
+                {xpos + 28, ypos + 8,  xpos + 38, ypos + 8 },
+                {xpos + 28, ypos + 12, xpos + 30, ypos + 12},
+                {xpos + 32, ypos + 12, xpos + 34, ypos + 12},
+                {xpos + 36, ypos + 12, xpos + 38, ypos + 12},
+            };
+            painter->drawLines(lines, 4);
+        } else if(devParms->chan[chn].coupling == Coup::AC) {
             painter->drawArc(xpos + 30, ypos + 8, 5, 5, 10 * 16, 160 * 16);
-
             painter->drawArc(xpos + 35, ypos + 8, 5, 5, -10 * 16, -160 * 16);
         }
     }

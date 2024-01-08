@@ -26,6 +26,48 @@
 */
 
 #include "read_settings_thread.h"
+#include <unordered_map>
+
+using namespace std::literals;
+
+template <typename K = std::string_view, typename V = int>
+struct Pair {
+    using Key = K;
+    using Val = V;
+    Key key;
+    Val val;
+};
+
+template <size_t N, typename Key = std::string_view, typename Val = int>
+struct Map : std::array<Pair<Key, Val>, N> {
+    using Pair_ = Pair<Key, Val>;
+    using Array = std::array<Pair_, N>;
+    using Array::Array;
+
+    template <typename Pair, typename... Pairs>
+    consteval Map(Pair&& pair, Pairs&&... pairs)
+        : Array{std::forward<Pair>(pair), std::forward<Pairs>(pairs)...} {
+        for(size_t i{}; i < N; ++i)
+            for(size_t j = i + 1; j < N; ++j)
+                if(Array::at(i).key == Array::at(j).key)
+                    throw "Two sane keys!!";
+    }
+
+    Val default_{};
+
+    constexpr const Val& operator[](const Key& key) const {
+        auto it = std::ranges::find(*this, key, &Pair_::key);
+        return it == Array::end() ? default_ : it->val;
+    }
+    constexpr const Val& at(const Key& key) const {
+        auto it = std::ranges::find(*this, key, &Pair_::key);
+        if(it == Array::end()) throw std::range_error{__PRETTY_FUNCTION__};
+        return it->val;
+    }
+};
+
+template <typename K = std::string_view, typename V = int, typename... Pairs>
+Map(Pair<K, V>&& pair, Pairs&&... pairs) -> Map<sizeof...(Pairs) + 1, K, V>;
 
 ReadSettingsThread::ReadSettingsThread() {
     device = nullptr;
@@ -56,1999 +98,842 @@ void ReadSettingsThread::setDevparmPtr(struct DeviceSettings* devp) {
 }
 
 void ReadSettingsThread::run() {
-    int chn, line = 0;
-
-    char str[512] = "";
-
     errNum = -1;
-
-    if(device == nullptr)
-        return;
-
-    if(devParms == nullptr)
-        return;
+    if(device == nullptr) return;
+    if(devParms == nullptr) return;
 
     devParms->activechannel = -1;
 
-    if(delay > 0)
-        sleep(delay);
+    if(delay > 0) sleep(delay);
 
-    for(chn = 0; chn < devParms->channelCnt; chn++) {
-        if(chn < 4) {
-            snprintf(str, 512, ":CHAN%i:BWL?", chn + 1);
+    int errLine{};
+    try {
+        errLine = [this] {
+            auto writeRead = []<size_t N>(const char(&str)[N], int len = N - 1) {
+                return (tmcWrite(str) != len || tmcRead() < 1);
+            };
+
+            char str[512] = "";
+            for(int chn = 0; chn < devParms->channelCnt; chn++) {
+                usleep(TMC_GDS_DELAY);
+                snprintf(str, 512, ":CHAN%i:BWL?", chn + 1);
+                if(writeRead(str, 11)) return __LINE__;
+                constexpr Map bwl{
+                    Pair{"20M"sv,  20 },
+                    Pair{"250M"sv, 250},
+                    Pair{"OFF"sv,  0  },
+                };
+                devParms->chan[chn].bwlimit = bwl.at(device->buf);
+
+                usleep(TMC_GDS_DELAY);
+                snprintf(str, 512, ":CHAN%i:COUP?", chn + 1);
+                if(writeRead(str, 12)) return __LINE__;
+                constexpr Map coup{
+                    Pair{"AC"sv,  Coup::AC },
+                    Pair{"DC"sv,  Coup::DC },
+                    Pair{"GND"sv, Coup::GND},
+                };
+                devParms->chan[chn].coupling = coup.at(device->buf);
+
+                usleep(TMC_GDS_DELAY);
+                snprintf(str, 512, ":CHAN%i:DISP?", chn + 1);
+                if(writeRead(str, 12)) return __LINE__;
+                if(!strcmp(device->buf, "0")) devParms->chan[chn].Display = 0;
+                else if(!strcmp(device->buf, "1")) {
+                    devParms->chan[chn].Display = 1;
+                    if(devParms->activechannel == -1)
+                        devParms->activechannel = chn;
+                } else return __LINE__;
+
+                if(devParms->modelSerie != 1) {
+                    usleep(TMC_GDS_DELAY);
+                    snprintf(str, 512, ":CHAN%i:IMP?", chn + 1);
+                    if(writeRead(str, 11)) return __LINE__;
+                    if(!strcmp(device->buf, "OMEG")) devParms->chan[chn].impedance = 0;
+                    else if(!strcmp(device->buf, "FIFT")) devParms->chan[chn].impedance = 1;
+                    else return __LINE__;
+                }
+
+                usleep(TMC_GDS_DELAY);
+                snprintf(str, 512, ":CHAN%i:INV?", chn + 1);
+                if(writeRead(str, 11)) return __LINE__;
+                if(!strcmp(device->buf, "0")) devParms->chan[chn].invert = 0;
+                else if(!strcmp(device->buf, "1")) devParms->chan[chn].invert = 1;
+                else return __LINE__;
+
+                usleep(TMC_GDS_DELAY);
+                snprintf(str, 512, ":CHAN%i:OFFS?", chn + 1);
+                if(writeRead(str, 12)) return __LINE__;
+                devParms->chan[chn].offset = atof(device->buf);
+
+                usleep(TMC_GDS_DELAY);
+                snprintf(str, 512, ":CHAN%i:PROB?", chn + 1);
+                if(writeRead(str, 12)) return __LINE__;
+                devParms->chan[chn].probe = atof(device->buf);
+
+                usleep(TMC_GDS_DELAY);
+                snprintf(str, 512, ":CHAN%i:UNIT?", chn + 1);
+                if(writeRead(str, 12)) return __LINE__;
+                constexpr Map unit{
+                    Pair{"VOLT"sv, 0},
+                    Pair{"WATT"sv, 1},
+                    Pair{"AMP"sv,  2},
+                    Pair{"UNKN"sv, 3},
+                };
+                devParms->chan[chn].unit = unit[device->buf];
+
+                usleep(TMC_GDS_DELAY);
+                snprintf(str, 512, ":CHAN%i:SCAL?", chn + 1);
+                if(writeRead(str, 12)) return __LINE__;
+                devParms->chan[chn].scale = atof(device->buf);
+
+                usleep(TMC_GDS_DELAY);
+                snprintf(str, 512, ":CHAN%i:VERN?", chn + 1);
+                if(writeRead(str, 12)) return __LINE__;
+                if(!strcmp(device->buf, "0")) devParms->chan[chn].vernier = 0;
+                else if(!strcmp(device->buf, "1")) devParms->chan[chn].vernier = 1;
+                else return __LINE__;
+
+            } // for
+
+            usleep(TMC_GDS_DELAY);
+            if(writeRead(":TIM:OFFS?", 10)) return __LINE__;
+            devParms->timebaseoffset = atof(device->buf);
+
+            usleep(TMC_GDS_DELAY);
+            if(writeRead(":TIM:SCAL?", 10)) return __LINE__;
+            devParms->timebasescale = atof(device->buf);
+
+            usleep(TMC_GDS_DELAY);
+            if(writeRead(":TIM:DEL:ENAB?", 14)) return __LINE__;
+            if(!strcmp(device->buf, "0")) devParms->timebasedelayenable = 0;
+            else if(!strcmp(device->buf, "1")) devParms->timebasedelayenable = 1;
+            else return __LINE__;
+
+            usleep(TMC_GDS_DELAY);
+            if(writeRead(":TIM:DEL:OFFS?", 14)) return __LINE__;
+            devParms->timebasedelayoffset = atof(device->buf);
+
+            usleep(TMC_GDS_DELAY);
+            if(writeRead(":TIM:DEL:SCAL?", 14)) return __LINE__;
+            devParms->timebasedelayscale = atof(device->buf);
+
+            if(devParms->modelSerie != 1) {
+                usleep(TMC_GDS_DELAY);
+                if(writeRead(":TIM:HREF:MODE?", 15)) return __LINE__;
+                if(!strcmp(device->buf, "CENT")) devParms->timebasehrefmode = 0;
+                else if(!strcmp(device->buf, "TPOS")) devParms->timebasehrefmode = 1;
+                else if(!strcmp(device->buf, "USER")) devParms->timebasehrefmode = 2;
+                else return __LINE__;
+
+                usleep(TMC_GDS_DELAY);
+                if(writeRead(":TIM:HREF:POS?", 14)) return __LINE__;
+                devParms->timebasehrefpos = atoi(device->buf);
+            }
+
+            usleep(TMC_GDS_DELAY);
+            if(writeRead(":TIM:MODE?", 10)) return __LINE__;
+            if(!strcmp(device->buf, "MAIN")) devParms->timebasemode = 0;
+            else if(!strcmp(device->buf, "XY")) devParms->timebasemode = 1;
+            else if(!strcmp(device->buf, "ROLL")) devParms->timebasemode = 2;
+            else return __LINE__;
+
+            if(devParms->modelSerie != 1) {
+                usleep(TMC_GDS_DELAY);
+                if(writeRead(":TIM:VERN?", 10)) return __LINE__;
+                if(!strcmp(device->buf, "0")) devParms->timebasevernier = 0;
+                else if(!strcmp(device->buf, "1")) devParms->timebasevernier = 1;
+                else return __LINE__;
+            }
+
+            if((devParms->modelSerie != 1) && (devParms->modelSerie != 2)) {
+                usleep(TMC_GDS_DELAY);
+                if(writeRead(":TIM:XY1:DISP?", 14)) return __LINE__;
+                if(!strcmp(device->buf, "0")) devParms->timebasexy1display = 0;
+                else if(!strcmp(device->buf, "1")) devParms->timebasexy1display = 1;
+                else return __LINE__;
+
+                usleep(TMC_GDS_DELAY);
+                if(writeRead(":TIM:XY2:DISP?", 14)) return __LINE__;
+                if(!strcmp(device->buf, "0")) devParms->timebasexy2display = 0;
+                else if(!strcmp(device->buf, "1")) devParms->timebasexy2display = 1;
+                else return __LINE__;
+            }
+
+            usleep(TMC_GDS_DELAY);
+            if(writeRead(":TRIG:COUP?", 11)) return __LINE__;
+            constexpr Map trigCoup{
+                Pair{"AC"sv,  0},
+                Pair{"DC"sv,  1},
+                Pair{"LFR"sv, 2},
+                Pair{"HFR"sv, 3},
+            };
+            devParms->triggercoupling = trigCoup.at(device->buf);
+
+            usleep(TMC_GDS_DELAY);
+            if(writeRead(":TRIG:SWE?", 10)) return __LINE__;
+            constexpr Map trigSweep{
+                Pair{"AUTO"sv, 0},
+                Pair{"NORM"sv, 1},
+                Pair{"SING"sv, 2},
+            };
+            devParms->triggersweep = trigSweep.at(device->buf);
+
+            usleep(TMC_GDS_DELAY);
+            if(writeRead(":TRIG:MODE?", 11)) return __LINE__;
+            constexpr Map trigMode{
+                Pair{"EDGE"sv,  0},
+                Pair{"PULS"sv,  1},
+                Pair{"SLOP"sv,  2},
+                Pair{"VID"sv,   3},
+                Pair{"PATT"sv,  4},
+                Pair{"RS232"sv, 5},
+                Pair{"IIC"sv,   6},
+                Pair{"SPI"sv,   7},
+                Pair{"CAN"sv,   8},
+                Pair{"USB"sv,   9},
+            };
+            devParms->triggermode = trigMode.at(device->buf);
+
+            usleep(TMC_GDS_DELAY);
+            if(writeRead(":TRIG:STAT?", 11)) return __LINE__;
+            constexpr Map trigStatus{
+                Pair{"TD"sv,   0},
+                Pair{"WAIT"sv, 1},
+                Pair{"RUN"sv,  2},
+                Pair{"AUTO"sv, 3},
+                Pair{"FIN"sv,  4},
+                Pair{"STOP"sv, 5},
+            };
+            devParms->triggerstatus = trigStatus.at(device->buf);
+
+            usleep(TMC_GDS_DELAY);
+            if(writeRead(":TRIG:EDG:SLOP?", 15)) return __LINE__;
+            constexpr Map trigEdgeSlope{
+                Pair{"POS"sv,  0},
+                Pair{"NEG"sv,  1},
+                Pair{"RFAL"sv, 2},
+            };
+            devParms->triggeredgeslope = trigEdgeSlope.at(device->buf);
+
+            usleep(TMC_GDS_DELAY);
+            constexpr Map chan{
+                Pair{"CHAN1"sv, CH_AN_1},
+                Pair{"CHAN2"sv, CH_AN_2},
+                Pair{"CHAN3"sv, CH_AN_3},
+                Pair{"CHAN4"sv, CH_AN_4},
+                Pair{"EXT"sv,   EXT    },
+                Pair{"EXT5"sv,  EXT5   },
+                Pair{"AC"sv,    AC     },
+                Pair{"ACL"sv,   ACL    },
+            };
+
+            // const std::unordered_map<std::string_view, CHD> chd{
+            //     {"D0"sv,  CH_DI_0 },
+            //     {"D1"sv,  CH_DI_1 },
+            //     {"D2"sv,  CH_DI_2 },
+            //     {"D3"sv,  CH_DI_3 },
+            //     {"D4"sv,  CH_DI_4 },
+            //     {"D5"sv,  CH_DI_5 },
+            //     {"D6"sv,  CH_DI_6 },
+            //     {"D7"sv,  CH_DI_7 },
+            //     {"D8"sv,  CH_DI_8 },
+            //     {"D9"sv,  CH_DI_9 },
+            //     {"D10"sv, CH_DI_10},
+            //     {"D11"sv, CH_DI_11},
+            //     {"D12"sv, CH_DI_12},
+            //     {"D13"sv, CH_DI_13},
+            //     {"D14"sv, CH_DI_14},
+            //     {"D15"sv, CH_DI_15},
+            // };
+
+            if(writeRead(":TRIG:EDG:SOUR?", 15)) return __LINE__;
+            devParms->triggeredgesource = chan.at(device->buf);
+
+            for(int chn = 0; chn < devParms->channelCnt; chn++) {
+                usleep(TMC_GDS_DELAY);
+                snprintf(str, 512, ":TRIG:EDG:SOUR CHAN%i", chn + 1);
+                if(tmcWrite(str) != 20) return __LINE__;
+
+                usleep(TMC_GDS_DELAY);
+                if(writeRead(":TRIG:EDG:LEV?", 14)) return __LINE__;
+                devParms->triggeredgelevel[chn] = atof(device->buf);
+            }
+
+            if(devParms->triggeredgesource < 4) {
+                snprintf(str, 512, ":TRIG:EDG:SOUR CHAN%i", devParms->triggeredgesource + 1);
+                usleep(TMC_GDS_DELAY);
+                if(tmcWrite(str) != 20) return __LINE__;
+            }
+
+            if(devParms->triggeredgesource == 4) {
+                usleep(TMC_GDS_DELAY);
+                if(tmcWrite(":TRIG:EDG:SOUR EXT")) return __LINE__;
+            }
+
+            if(devParms->triggeredgesource == 5) {
+                usleep(TMC_GDS_DELAY);
+                if(tmcWrite(":TRIG:EDG:SOUR EXT5")) return __LINE__;
+            }
+
+            if(devParms->triggeredgesource == 6) {
+                usleep(TMC_GDS_DELAY);
+                if(tmcWrite(":TRIG:EDG:SOUR AC")) return __LINE__;
+            }
+
+            usleep(TMC_GDS_DELAY);
+            if(writeRead(":TRIG:HOLD?", 11)) return __LINE__;
+            devParms->triggerholdoff = atof(device->buf);
+
+            usleep(TMC_GDS_DELAY);
+            if(writeRead(":ACQ:SRAT?", 10)) return __LINE__;
+            devParms->samplerate = atof(device->buf);
+
+            usleep(TMC_GDS_DELAY);
+            if(writeRead(":DISP:GRID?", 11)) return __LINE__;
+            if(!strcmp(device->buf, "NONE")) devParms->displaygrid = 0;
+            else if(!strcmp(device->buf, "HALF")) devParms->displaygrid = 1;
+            else if(!strcmp(device->buf, "FULL")) devParms->displaygrid = 2;
+            else return __LINE__;
+
+            usleep(TMC_GDS_DELAY);
+            if(writeRead(":MEAS:COUN:SOUR?", 16)) return __LINE__;
+            devParms->countersrc = Map{
+                Pair{"OFF"sv,   0},
+                Pair{"CHAN1"sv, 1},
+                Pair{"CHAN2"sv, 2},
+                Pair{"CHAN3"sv, 3},
+                Pair{"CHAN4"sv, 4}
+            }.at(device->buf);
+
+            usleep(TMC_GDS_DELAY);
+            if(writeRead(":DISP:TYPE?", 11)) return __LINE__;
+            constexpr Map dispType{
+                Pair{"VECT"sv, 0},
+                Pair{"DOTS"sv, 1},
+            };
+            devParms->displaytype = dispType.at(device->buf);
+
+            usleep(TMC_GDS_DELAY);
+            if(writeRead(":ACQ:TYPE?", 10)) return __LINE__;
+            devParms->acquiretype = Map{
+                Pair{"NORM"sv, 0},
+                Pair{"AVER"sv, 1},
+                Pair{"PEAK"sv, 2},
+                Pair{"HRES"sv, 3}
+            }.at(device->buf);
+
+            usleep(TMC_GDS_DELAY);
+            if(writeRead(":ACQ:AVER?", 10)) return __LINE__;
+            devParms->acquireaverages = atoi(device->buf);
+
+            usleep(TMC_GDS_DELAY);
+            if(writeRead(":DISP:GRAD:TIME?", 16)) return __LINE__;
+            devParms->displaygrading = Map{
+                Pair{"MIN"sv, 0    },
+                Pair{"0.1"sv, 1    },
+                Pair{"0.2"sv, 2    },
+                Pair{"0.5"sv, 5    },
+                Pair{"1"sv,   10   },
+                Pair{"2"sv,   20   },
+                Pair{"5"sv,   50   },
+                Pair{"INF"sv, 10000}
+            }.at(device->buf);
+
+            usleep(TMC_GDS_DELAY);
+            if(devParms->modelSerie != 1) {
+                if(writeRead(":CALC:FFT:SPL?", 14)) return __LINE__;
+            } else if(writeRead(":MATH:FFT:SPL?", 14)) return __LINE__;
+            devParms->mathFftSplit = atoi(device->buf);
 
             usleep(TMC_GDS_DELAY);
 
-            if(tmcWrite(str) != 11) {
-                line = __LINE__;
-                goto GDS_OUT_ERROR;
-            }
-
-            if(tmcRead() < 1) {
-                line = __LINE__;
-                goto GDS_OUT_ERROR;
-            }
-
-            if(!strcmp(device->buf, "20M")) {
-                devParms->chanbwlimit[chn] = 20;
-            } else if(!strcmp(device->buf, "250M")) {
-                devParms->chanbwlimit[chn] = 250;
-            } else if(!strcmp(device->buf, "OFF")) {
-                devParms->chanbwlimit[chn] = 0;
+            if(devParms->modelSerie != 1) {
+                if(writeRead(":CALC:MODE?", 11)) return __LINE__;
+                if(!strcmp(device->buf, "FFT")) devParms->mathFft = 1;
+                else devParms->mathFft = 0;
             } else {
-                line = __LINE__;
-                goto GDS_OUT_ERROR;
+                if(writeRead(":MATH:DISP?", 11)) return __LINE__;
+                devParms->mathFft = atoi(device->buf);
+
+                if(devParms->mathFft == 1) {
+                    usleep(TMC_GDS_DELAY);
+
+                    if(writeRead(":MATH:OPER?", 11)) return __LINE__;
+                    if(!strcmp(device->buf, "FFT")) devParms->mathFft = 1;
+                    else devParms->mathFft = 0;
+                }
             }
 
-            snprintf(str, 512, ":CHAN%i:COUP?", chn + 1);
+            usleep(TMC_GDS_DELAY);
+            if(devParms->modelSerie != 1) {
+                if(writeRead(":CALC:FFT:VSM?", 14)) return __LINE__;
+            } else if(writeRead(":MATH:FFT:UNIT?", 15)) return __LINE__;
+            if(!strcmp(device->buf, "VRMS")) {
+                devParms->fftVScale = 0.5;
+                devParms->fftVOffset = -2.0;
+                devParms->mathFftUnit = 0;
+            } else {
+                devParms->fftVScale = 10.0;
+                devParms->fftVOffset = 20.0;
+                devParms->mathFftUnit = 1;
+            }
+
+            usleep(TMC_GDS_DELAY);
+            if(devParms->modelSerie != 1) {
+                if(writeRead(":CALC:FFT:SOUR?", 15)) return __LINE__;
+            } else if(writeRead(":MATH:FFT:SOUR?", 15)) return __LINE__;
+            devParms->mathFftSrc = Map{
+                Pair{"CHAN1"sv, 0},
+                Pair{"CHAN2"sv, 1},
+                Pair{"CHAN3"sv, 2},
+                Pair{"CHAN4"sv, 3}
+            }[device->buf];
+
+            usleep(TMC_GDS_DELAY);
+            devParms->currentScreenSf = 100.0 / devParms->timebasescale;
+            if(devParms->modelSerie != 1) {
+                if(writeRead(":CALC:FFT:HSP?", 14)) return __LINE__;
+                devParms->mathFftHscale = atof(device->buf);
+
+                //     if(tmc_write(":CALC:FFT:HSC?") != 14)
+                //     {            //       return  __LINE__;
+                //                   //     }
+                //
+                //     if(tmc_read() < 1)
+                //     {            //       return  __LINE__;
+                //                   //     }
+                //
+                //     switch(atoi(device->buf))
+                //     {
+                // //       case  0: devParms->math_fft_hscale = devParms->current_screen_sf / 80.0;
+                // //                break;
+                //       case  1: devParms->math_fft_hscale = devParms->current_screen_sf / 40.0;
+                //                break;
+                //       case  2: devParms->math_fft_hscale = devParms->current_screen_sf / 80.0;
+                //                break;
+                //       case  3: devParms->math_fft_hscale = devParms->current_screen_sf / 200.0;
+                //                break;
+                //       default: devParms->math_fft_hscale = devParms->current_screen_sf / 40.0;
+                //                break;
+                //     }
+            } else {
+                if(writeRead(":MATH:FFT:HSC?", 14)) return __LINE__;
+                devParms->mathFftHscale = atof(device->buf);
+            }
+
+            usleep(TMC_GDS_DELAY);
+            if(devParms->modelSerie != 1) {
+                if(writeRead(":CALC:FFT:HCEN?", 15)) return __LINE__;
+            } else if(writeRead(":MATH:FFT:HCEN?", 15)) return __LINE__;
+            devParms->mathFftHcenter = atof(device->buf);
+
+            usleep(TMC_GDS_DELAY);
+            if(devParms->modelSerie != 1) {
+                if(writeRead(":CALC:FFT:VOFF?", 15)) return __LINE__;
+            } else if(writeRead(":MATH:OFFS?", 11)) return __LINE__;
+            devParms->fftVOffset = atof(device->buf);
+
+            usleep(TMC_GDS_DELAY);
+            if(devParms->modelSerie != 1) {
+                if(writeRead(":CALC:FFT:VSC?", 14)) return __LINE__;
+                if(devParms->mathFftUnit == 1)
+                    devParms->fftVScale = atof(device->buf);
+                else
+                    devParms->fftVScale = atof(device->buf) * devParms->chan[devParms->mathFftSrc].scale;
+            } else {
+                if(writeRead(":MATH:SCAL?", 11)) return __LINE__;
+                devParms->fftVScale = atof(device->buf);
+            }
 
             usleep(TMC_GDS_DELAY);
 
-            if(tmcWrite(str) != 12) {
-                line = __LINE__;
-                goto GDS_OUT_ERROR;
-            }
+            if(devParms->modelSerie != 1) {
+                if(writeRead(":BUS1:MODE?", 11)) return __LINE__;
+            } else if(writeRead(":DEC1:MODE?", 11)) return __LINE__;
+            devParms->mathDecodeMode = Map{
+                Pair{"PAR"sv,   0},
+                Pair{"UART"sv,  1},
+                Pair{"RS232"sv, 1},
+                Pair{"SPI"sv,   2},
+                Pair{"IIC"sv,   3}
+            }[device->buf];
 
-            if(tmcRead() < 1) {
-                line = __LINE__;
-                goto GDS_OUT_ERROR;
-            }
-
-            if(!strcmp(device->buf, "AC")) {
-                devParms->chancoupling[chn] = 2;
-            } else if(!strcmp(device->buf, "DC")) {
-                devParms->chancoupling[chn] = 1;
-            } else if(!strcmp(device->buf, "GND")) {
-                devParms->chancoupling[chn] = 0;
-            } else {
-                line = __LINE__;
-                goto GDS_OUT_ERROR;
-            }
-
-            snprintf(str, 512, ":CHAN%i:DISP?", chn + 1);
             usleep(TMC_GDS_DELAY);
+            if(devParms->modelSerie != 1) {
+                if(writeRead(":BUS1:DISP?", 11)) return __LINE__;
+            } else if(writeRead(":DEC1:DISP?", 11)) return __LINE__;
+            devParms->mathDecodeDisplay = atoi(device->buf);
 
-            if(tmcWrite(str) != 12) {
-                line = __LINE__;
-                goto GDS_OUT_ERROR;
-            }
+            usleep(TMC_GDS_DELAY);
+            if(devParms->modelSerie != 1) {
+                if(writeRead(":BUS1:FORM?", 11)) return __LINE__;
+            } else if(writeRead(":DEC1:FORM?", 11)) return __LINE__;
+            devParms->mathDecodeFormat = Map{
+                Pair{"HEX"sv,  0},
+                Pair{"ASC"sv,  1},
+                Pair{"DEC"sv,  2},
+                Pair{"BIN"sv,  3},
+                Pair{"LINE"sv, 4}
+            }[device->buf];
 
-            if(tmcRead() < 1) {
-                line = __LINE__;
-                goto GDS_OUT_ERROR;
-            }
+            usleep(TMC_GDS_DELAY);
+            if(devParms->modelSerie != 1) {
+                if(writeRead(":BUS1:SPI:OFFS?", 15)) return __LINE__;
+            } else if(writeRead(":DEC1:POS?", 10)) return __LINE__;
+            devParms->mathDecodePos = atoi(device->buf);
 
-            if(!strcmp(device->buf, "0")) {
-                devParms->chanDisplay[chn] = 0;
-            } else if(!strcmp(device->buf, "1")) {
-                devParms->chanDisplay[chn] = 1;
+            usleep(TMC_GDS_DELAY);
+            if(devParms->modelSerie != 1) {
+                if(writeRead(":BUS1:SPI:MISO:THR?", 19)) return __LINE__;
+            } else if(writeRead(":DEC1:THRE:CHAN1?", 17)) return __LINE__;
+            devParms->chan[0].mathDecodeThreshold = atof(device->buf);
 
-                if(devParms->activechannel == -1)
-                    devParms->activechannel = chn;
-            } else {
-                line = __LINE__;
-                goto GDS_OUT_ERROR;
+            usleep(TMC_GDS_DELAY);
+            if(devParms->modelSerie != 1) {
+                if(writeRead(":BUS1:SPI:MOSI:THR?", 19)) return __LINE__;
+            } else if(writeRead(":DEC1:THRE:CHAN2?", 17)) return __LINE__;
+            devParms->chan[1].mathDecodeThreshold = atof(device->buf);
+
+            if(devParms->channelCnt == 4) {
+                usleep(TMC_GDS_DELAY);
+                if(devParms->modelSerie != 1) {
+                    if(writeRead(":BUS1:SPI:SCLK:THR?", 19)) return __LINE__;
+                } else if(writeRead(":DEC1:THRE:CHAN3?", 17)) return __LINE__;
+                devParms->chan[2].mathDecodeThreshold = atof(device->buf);
+
+                usleep(TMC_GDS_DELAY);
+                if(devParms->modelSerie != 1) {
+                    if(writeRead(":BUS1:SPI:SS:THR?", 17)) return __LINE__;
+                } else if(writeRead(":DEC1:THRE:CHAN4?", 17)) return __LINE__;
+                devParms->chan[3].mathDecodeThreshold = atof(device->buf);
             }
 
             if(devParms->modelSerie != 1) {
-                snprintf(str, 512, ":CHAN%i:IMP?", chn + 1);
+                usleep(TMC_GDS_DELAY);
+                if(writeRead(":BUS1:RS232:TTHR?", 17)) return __LINE__;
+                //    devParms->math_decode_threshold_uart_tx = atof(device->buf);
+                devParms->mathDecodeThresholdUartTx = atof(device->buf) * 10.0; // hack for firmware bug!
 
                 usleep(TMC_GDS_DELAY);
+                if(writeRead(":BUS1:RS232:RTHR?", 17)) return __LINE__;
+                //    devParms->math_decode_threshold_uart_rx = atof(device->buf);
+                devParms->mathDecodeThresholdUartRx = atof(device->buf) * 10.0; // hack for firmware bug!
+            }
 
-                if(tmcWrite(str) != 11) {
-                    line = __LINE__;
-                    goto GDS_OUT_ERROR;
+            if(devParms->modelSerie == 1) {
+                usleep(TMC_GDS_DELAY);
+                if(writeRead(":DEC1:THRE:AUTO?", 16)) return __LINE__;
+                devParms->mathDecodeThresholdAuto = atoi(device->buf);
+            }
+
+            usleep(TMC_GDS_DELAY);
+            constexpr Map decoder{
+                Pair{"CHAN1"sv, CH_AN_1},
+                Pair{"CHAN2"sv, CH_AN_2},
+                Pair{"CHAN3"sv, CH_AN_3},
+                Pair{"CHAN4"sv, CH_AN_4},
+                Pair{"OFF"sv,   OFF    },
+            };
+
+            if(devParms->modelSerie != 1) {
+                if(writeRead(":BUS1:RS232:RX?", 15)) return __LINE__;
+            } else if(writeRead(":DEC1:UART:RX?", 14)) return __LINE__;
+            devParms->mathDecodeUartRx = decoder[device->buf];
+
+            usleep(TMC_GDS_DELAY);
+            if(devParms->modelSerie != 1) {
+                if(writeRead(":BUS1:RS232:TX?", 15)) return __LINE__;
+            } else if(writeRead(":DEC1:UART:TX?", 14)) return __LINE__;
+            devParms->mathDecodeUartTx = decoder[device->buf];
+
+            usleep(TMC_GDS_DELAY);
+            if(devParms->modelSerie != 1) {
+                if(writeRead(":BUS1:RS232:POL?", 16)) return __LINE__;
+            } else if(writeRead(":DEC1:UART:POL?", 15)) return __LINE__;
+            devParms->mathDecodeUartPol = Map{
+                Pair{"POS"sv, 1},
+                Pair{"NEG"sv, 0}
+            }[device->buf];
+
+            usleep(TMC_GDS_DELAY);
+            if(devParms->modelSerie != 1) {
+                if(writeRead(":BUS1:RS232:END?", 16)) return __LINE__;
+            } else if(writeRead(":DEC1:UART:END?", 15)) return __LINE__;
+            devParms->mathDecodeUartPol = Map{
+                Pair{"MSB"sv, 1},
+                Pair{"LSB"sv, 0}
+            }[device->buf];
+
+            usleep(TMC_GDS_DELAY);
+            if(devParms->modelSerie != 1) {
+                if(writeRead(":BUS1:RS232:BAUD?", 17)) return __LINE__;
+            } else if(writeRead(":DEC1:UART:BAUD?", 16)) return __LINE__;
+            // FIXME  DEC1:UART:BAUD? can return also "USER" instead of a number!
+            devParms->mathDecodeUartBaud = atoi(device->buf);
+
+            usleep(TMC_GDS_DELAY);
+            if(devParms->modelSerie != 1) {
+                if(writeRead(":BUS1:RS232:DBIT?", 17)) return __LINE__;
+            } else if(writeRead(":DEC1:UART:WIDT?", 16)) return __LINE__;
+            devParms->mathDecodeUartWidth = atoi(device->buf);
+
+            usleep(TMC_GDS_DELAY);
+            if(devParms->modelSerie != 1) {
+                if(writeRead(":BUS1:RS232:SBIT?", 17)) return __LINE__;
+            } else if(writeRead(":DEC1:UART:STOP?", 16)) return __LINE__;
+            devParms->mathDecodeUartStop = Map{
+                Pair{"1"sv,   0},
+                Pair{"1.5"sv, 1},
+                Pair{"2"sv,   2}
+            }[device->buf];
+
+            usleep(TMC_GDS_DELAY);
+
+            if(devParms->modelSerie != 1) {
+                if(writeRead(":BUS1:RS232:PAR?", 16)) return __LINE__;
+            } else if(writeRead(":DEC1:UART:PAR?", 15)) return __LINE__;
+            devParms->mathDecodeUartPar = Map{
+                Pair{"ODD"sv,  1},
+                Pair{"EVEN"sv, 2},
+                Pair{"NONE"sv, 0}
+            }[device->buf];
+
+            usleep(TMC_GDS_DELAY);
+
+            if(devParms->modelSerie != 1) {
+                if(writeRead(":BUS1:SPI:SCLK:SOUR?", 20)) return __LINE__;
+            } else if(writeRead(":DEC1:SPI:CLK?", 14)) return __LINE__;
+            devParms->mathDecodeSpiClk = decoder[device->buf];
+
+            usleep(TMC_GDS_DELAY);
+            if(devParms->modelSerie != 1) {
+                if(writeRead(":BUS1:SPI:MISO:SOUR?", 20)) return __LINE__;
+            } else if(writeRead(":DEC1:SPI:MISO?", 15)) return __LINE__;
+            devParms->mathDecodeSpiMiso = decoder[device->buf];
+
+            usleep(TMC_GDS_DELAY);
+            if(devParms->modelSerie != 1) {
+                if(writeRead(":BUS1:SPI:MOSI:SOUR?", 20)) return __LINE__;
+            } else if(writeRead(":DEC1:SPI:MOSI?", 15)) return __LINE__;
+            devParms->mathDecodeSpiMosi = decoder[device->buf];
+
+            usleep(TMC_GDS_DELAY);
+            if(devParms->modelSerie != 1) {
+                if(writeRead(":BUS1:SPI:SS:SOUR?", 18)) return __LINE__;
+            } else if(writeRead(":DEC1:SPI:CS?", 13)) return __LINE__;
+            devParms->mathDecodeSpiCs = decoder[device->buf];
+
+            usleep(TMC_GDS_DELAY);
+            if(devParms->modelSerie != 1) {
+                if(writeRead(":BUS1:SPI:SS:POL?", 17)) return __LINE__;
+            } else if(writeRead(":DEC1:SPI:SEL?", 14)) return __LINE__;
+            devParms->mathDecodeSpiSelect = Map{
+                Pair{"NCS"sv, 0},
+                Pair{"CS"sv,  1},
+                Pair{"NEG"sv, 0},
+                Pair{"POS"sv, 1}
+            }[device->buf];
+
+            if(devParms->modelSerie == 1) {
+                usleep(TMC_GDS_DELAY);
+                if(writeRead(":DEC1:SPI:MODE?", 15)) return __LINE__;
+                devParms->mathDecodeSpiMode = Map{
+                    Pair{"TIM"sv, 0},
+                    Pair{"CS"sv,  1},
+                }[device->buf];
+            }
+
+            if(devParms->modelSerie == 1) {
+                usleep(TMC_GDS_DELAY);
+                if(writeRead(":DEC1:SPI:TIM?", 14)) return __LINE__;
+                devParms->mathDecodeSpiTimeout = atof(device->buf);
+            }
+
+            usleep(TMC_GDS_DELAY);
+
+            if(devParms->modelSerie != 1) {
+                if(writeRead(":BUS1:SPI:MOSI:POL?", 19)) return __LINE__;
+            } else if(writeRead(":DEC1:SPI:POL?", 14)) return __LINE__;
+            devParms->mathDecodeSpiPol = Map{
+                Pair{"POS"sv, 1},
+                Pair{"NEG"sv, 0}
+            }[device->buf];
+
+            usleep(TMC_GDS_DELAY);
+            if(devParms->modelSerie != 1) {
+                if(writeRead(":BUS1:SPI:SCLK:SLOP?", 20)) return __LINE__;
+            } else if(writeRead(":DEC1:SPI:EDGE?", 15)) return __LINE__;
+            devParms->mathDecodeSpiEdge = Map{
+                Pair{"NEG"sv,  0},
+                Pair{"POS"sv,  1},
+                Pair{"FALL"sv, 0},
+                Pair{"RISE"sv, 1}
+            }[device->buf];
+
+            usleep(TMC_GDS_DELAY);
+            if(devParms->modelSerie != 1) {
+                if(writeRead(":BUS1:SPI:DBIT?", 15)) return __LINE__;
+            } else if(writeRead(":DEC1:SPI:WIDT?", 15)) return __LINE__;
+            devParms->mathDecodeSpiWidth = atoi(device->buf);
+
+            usleep(TMC_GDS_DELAY);
+            if(devParms->modelSerie != 1) {
+                if(writeRead(":BUS1:SPI:END?", 14)) return __LINE__;
+            } else if(writeRead(":DEC1:SPI:END?", 14)) return __LINE__;
+            devParms->mathDecodeSpiEnd = Map{
+                Pair{"LSB"sv, 0},
+                Pair{"MSB"sv, 1}
+            }[device->buf];
+
+            usleep(TMC_GDS_DELAY);
+            if(devParms->modelSerie == 1) {
+                if(writeRead(":FUNC:WREC:ENAB?", 16)) return __LINE__;
+                constexpr Map wrec{
+                    Pair{"0"sv, 0},
+                    Pair{"1"sv, 1},
+                };
+                devParms->funcWrecEnable = wrec[device->buf];
+            } else {
+                if(writeRead(":FUNC:WRM?", 10)) return __LINE__;
+                devParms->funcWrecEnable = Map{
+                    Pair{"REC"sv,  1},
+                    Pair{"PLAY"sv, 2},
+                    Pair{"OFF"sv,  0}
+                }.at(device->buf);
+            }
+
+            if(devParms->funcWrecEnable) {
+                usleep(TMC_GDS_DELAY);
+                if(writeRead(":FUNC:WREC:FEND?", 16)) return __LINE__;
+                devParms->funcWrecFend = atoi(device->buf);
+
+                usleep(TMC_GDS_DELAY);
+                if(writeRead(":FUNC:WREC:FMAX?", 16)) return __LINE__;
+                devParms->funcWrecFmax = atoi(device->buf);
+
+                usleep(TMC_GDS_DELAY);
+                if(writeRead(":FUNC:WREC:FINT?", 16)) return __LINE__;
+                devParms->funcWrecFintval = atof(device->buf);
+
+                usleep(TMC_GDS_DELAY);
+                if(writeRead(":FUNC:WREP:FST?", 15)) return __LINE__;
+                devParms->funcWplayFstart = atoi(device->buf);
+
+                usleep(TMC_GDS_DELAY);
+                if(writeRead(":FUNC:WREP:FEND?", 16)) return __LINE__;
+                devParms->funcWplayFend = atoi(device->buf);
+
+                usleep(TMC_GDS_DELAY);
+                if(writeRead(":FUNC:WREP:FMAX?", 16)) return __LINE__;
+                devParms->funcWplayFmax = atoi(device->buf);
+
+                usleep(TMC_GDS_DELAY);
+                if(writeRead(":FUNC:WREP:FINT?", 16)) return __LINE__;
+                devParms->funcWplayFintval = atof(device->buf);
+
+                usleep(TMC_GDS_DELAY);
+                if(writeRead(":FUNC:WREP:FCUR?", 16)) return __LINE__;
+                devParms->funcWplayFcur = atoi(device->buf);
+            }
+
+            usleep(TMC_GDS_DELAY);
+            if(writeRead(":LA:STATe?", 10)) return __LINE__;
+            devParms->la.STATe = atoi(device->buf);
+
+            if(devParms->la.STATe) {
+                usleep(TMC_GDS_DELAY);
+                if(writeRead(":LA:ACTive?", 11)) return __LINE__;
+                constexpr Map active{
+                    Pair{"D0"sv,     int(LA::D0)    },
+                    Pair{"D1"sv,     int(LA::D1)    },
+                    Pair{"D2"sv,     int(LA::D2)    },
+                    Pair{"D3"sv,     int(LA::D3)    },
+                    Pair{"D4"sv,     int(LA::D4)    },
+                    Pair{"D5"sv,     int(LA::D5)    },
+                    Pair{"D6"sv,     int(LA::D6)    },
+                    Pair{"D7"sv,     int(LA::D7)    },
+                    Pair{"D8"sv,     int(LA::D8)    },
+                    Pair{"D9"sv,     int(LA::D9)    },
+                    Pair{"D10"sv,    int(LA::D10)   },
+                    Pair{"D11"sv,    int(LA::D11)   },
+                    Pair{"D12"sv,    int(LA::D12)   },
+                    Pair{"D13"sv,    int(LA::D13)   },
+                    Pair{"D14"sv,    int(LA::D14)   },
+                    Pair{"D15"sv,    int(LA::D15)   },
+                    Pair{"GROUP1"sv, int(LA::GROUP1)},
+                    Pair{"GROUP2"sv, int(LA::GROUP2)},
+                    Pair{"GROUP3"sv, int(LA::GROUP3)},
+                    Pair{"GROUP4"sv, int(LA::GROUP4)}
+                };
+                devParms->la.ACTive = active[device->buf];
+
+                usleep(TMC_GDS_DELAY);
+                // if(writeRead(":LA:DISPlay?",12) ) return __LINE__;
+                //                 // devParms->la.DISPlay;
+
+                usleep(TMC_GDS_DELAY);
+                if(writeRead(":LA:SIZE?", 9)) return __LINE__;
+                constexpr Map size{
+                    Pair{"LARGe"sv, LA::Size::LARGe},
+                    Pair{"SMALl"sv, LA::Size::SMALl},
+                };
+                devParms->la.SIZE = size[device->buf];
+
+                usleep(TMC_GDS_DELAY);
+                if(writeRead(":LA:TCALibrate?", 15)) return __LINE__;
+                devParms->la.TCALibrate = atof(device->buf);
+
+                for(int digCh = 0; digCh < 16; ++digCh) {
+                    usleep(TMC_GDS_DELAY);
+                    int len = snprintf(str, 512, ":LA:DIGital%i:DISPlay?", digCh);
+                    str[len] = 0;
+                    if(writeRead(str, len)) return __LINE__;
+                    devParms->la.DIGital[digCh].DISPlay = atoi(device->buf);
+
+                    usleep(TMC_GDS_DELAY);
+                    len = snprintf(str, 512, ":LA:DIGital%i:POSition?", digCh);
+                    str[len] = 0;
+                    if(writeRead(str, len)) return __LINE__;
+                    devParms->la.DIGital[digCh].POSition = atoi(device->buf);
+
+                    usleep(TMC_GDS_DELAY);
+                    len = snprintf(str, 512, ":LA:DIGital%i:LABel?", digCh);
+                    str[len] = 0;
+                    if(writeRead(str, len)) return __LINE__;
+                    strncat(devParms->la.DIGital[digCh].LABel, device->buf, 4);
                 }
 
-                if(tmcRead() < 1) {
-                    line = __LINE__;
-                    goto GDS_OUT_ERROR;
-                }
+                usleep(TMC_GDS_DELAY);
+                if(writeRead(":LA:POD1:THReshold?", 19)) return __LINE__;
+                devParms->la.PODTHReshold[0] = atof(device->buf);
+                usleep(TMC_GDS_DELAY);
 
-                if(!strcmp(device->buf, "OMEG")) {
-                    devParms->chanimpedance[chn] = 0;
-                } else if(!strcmp(device->buf, "FIFT")) {
-                    devParms->chanimpedance[chn] = 1;
-                } else {
-                    line = __LINE__;
-                    goto GDS_OUT_ERROR;
-                }
+                if(writeRead(":LA:POD2:THReshold?", 19)) return __LINE__;
+                devParms->la.PODTHReshold[1] = atof(device->buf);
+                usleep(TMC_GDS_DELAY);
+
+                // :LA:POD<n>:DISPlay
             }
 
-            snprintf(str, 512, ":CHAN%i:INV?", chn + 1);
-
-            usleep(TMC_GDS_DELAY);
-
-            if(tmcWrite(str) != 11) {
-                line = __LINE__;
-                goto GDS_OUT_ERROR;
-            }
-
-            if(tmcRead() < 1) {
-                line = __LINE__;
-                goto GDS_OUT_ERROR;
-            }
-
-            if(!strcmp(device->buf, "0")) {
-                devParms->chaninvert[chn] = 0;
-            } else if(!strcmp(device->buf, "1")) {
-                devParms->chaninvert[chn] = 1;
-            } else {
-                line = __LINE__;
-                goto GDS_OUT_ERROR;
-            }
-
-            snprintf(str, 512, ":CHAN%i:OFFS?", chn + 1);
-
-            usleep(TMC_GDS_DELAY);
-
-            if(tmcWrite(str) != 12) {
-                line = __LINE__;
-                goto GDS_OUT_ERROR;
-            }
-
-            if(tmcRead() < 1) {
-                line = __LINE__;
-                goto GDS_OUT_ERROR;
-            }
-
-            devParms->chanoffset[chn] = atof(device->buf);
-
-            snprintf(str, 512, ":CHAN%i:PROB?", chn + 1);
-
-            usleep(TMC_GDS_DELAY);
-
-            if(tmcWrite(str) != 12) {
-                line = __LINE__;
-                goto GDS_OUT_ERROR;
-            }
-
-            if(tmcRead() < 1) {
-                line = __LINE__;
-                goto GDS_OUT_ERROR;
-            }
-
-            devParms->chanprobe[chn] = atof(device->buf);
-
-            snprintf(str, 512, ":CHAN%i:UNIT?", chn + 1);
-
-            usleep(TMC_GDS_DELAY);
-
-            if(tmcWrite(str) != 12) {
-                line = __LINE__;
-                goto GDS_OUT_ERROR;
-            }
-
-            if(tmcRead() < 1) {
-                line = __LINE__;
-                goto GDS_OUT_ERROR;
-            }
-
-            if(!strcmp(device->buf, "VOLT"))
-                devParms->chanunit[chn] = 0;
-            else if(!strcmp(device->buf, "WATT"))
-                devParms->chanunit[chn] = 1;
-            else if(!strcmp(device->buf, "AMP"))
-                devParms->chanunit[chn] = 2;
-            else if(!strcmp(device->buf, "UNKN"))
-                devParms->chanunit[chn] = 3;
-            else
-                devParms->chanunit[chn] = 0;
-
-            snprintf(str, 512, ":CHAN%i:SCAL?", chn + 1);
-
-            usleep(TMC_GDS_DELAY);
-
-            if(tmcWrite(str) != 12) {
-                line = __LINE__;
-                goto GDS_OUT_ERROR;
-            }
-
-            if(tmcRead() < 1) {
-                line = __LINE__;
-                goto GDS_OUT_ERROR;
-            }
-
-            devParms->chanscale[chn] = atof(device->buf);
-
-            snprintf(str, 512, ":CHAN%i:VERN?", chn + 1);
-
-            usleep(TMC_GDS_DELAY);
-
-            if(tmcWrite(str) != 12) {
-                line = __LINE__;
-                goto GDS_OUT_ERROR;
-            }
-
-            if(tmcRead() < 1) {
-                line = __LINE__;
-                goto GDS_OUT_ERROR;
-            }
-
-            if(!strcmp(device->buf, "0")) {
-                devParms->chanvernier[chn] = 0;
-            } else if(!strcmp(device->buf, "1")) {
-                devParms->chanvernier[chn] = 1;
-            } else {
-                line = __LINE__;
-                goto GDS_OUT_ERROR;
-            }
-        } else {
-            snprintf(str, 512, ":LA:DIG%i:DISP?", chn - 4);
-            usleep(TMC_GDS_DELAY);
-
-            if(tmcWrite(str) != strnlen(str, 512)) {
-                line = __LINE__;
-                goto GDS_OUT_ERROR;
-            }
-
-            if(tmcRead() < 1) {
-                line = __LINE__;
-                goto GDS_OUT_ERROR;
-            }
-
-            if(!strcmp(device->buf, "0")) {
-                devParms->chanDisplay[chn] = 0;
-            } else if(!strcmp(device->buf, "1")) {
-                devParms->chanDisplay[chn] = 1;
-
-                if(devParms->activechannel == -1)
-                    devParms->activechannel = chn;
-            } else {
-                line = __LINE__;
-                goto GDS_OUT_ERROR;
-            }
-        }
-    }
-
-    usleep(TMC_GDS_DELAY);
-
-    if(tmcWrite(":TIM:OFFS?") != 10) {
-        line = __LINE__;
-        goto GDS_OUT_ERROR;
-    }
-
-    if(tmcRead() < 1) {
-        line = __LINE__;
-        goto GDS_OUT_ERROR;
-    }
-
-    devParms->timebaseoffset = atof(device->buf);
-
-    usleep(TMC_GDS_DELAY);
-
-    if(tmcWrite(":TIM:SCAL?") != 10) {
-        line = __LINE__;
-        goto GDS_OUT_ERROR;
-    }
-
-    if(tmcRead() < 1) {
-        line = __LINE__;
-        goto GDS_OUT_ERROR;
-    }
-
-    devParms->timebasescale = atof(device->buf);
-
-    usleep(TMC_GDS_DELAY);
-
-    if(tmcWrite(":TIM:DEL:ENAB?") != 14) {
-        line = __LINE__;
-        goto GDS_OUT_ERROR;
-    }
-
-    if(tmcRead() < 1) {
-        line = __LINE__;
-        goto GDS_OUT_ERROR;
-    }
-
-    if(!strcmp(device->buf, "0")) {
-        devParms->timebasedelayenable = 0;
-    } else if(!strcmp(device->buf, "1")) {
-        devParms->timebasedelayenable = 1;
-    } else {
-        line = __LINE__;
-        goto GDS_OUT_ERROR;
-    }
-
-    usleep(TMC_GDS_DELAY);
-
-    if(tmcWrite(":TIM:DEL:OFFS?") != 14) {
-        line = __LINE__;
-        goto GDS_OUT_ERROR;
-    }
-
-    if(tmcRead() < 1) {
-        line = __LINE__;
-        goto GDS_OUT_ERROR;
-    }
-
-    devParms->timebasedelayoffset = atof(device->buf);
-
-    usleep(TMC_GDS_DELAY);
-
-    if(tmcWrite(":TIM:DEL:SCAL?") != 14) {
-        line = __LINE__;
-        goto GDS_OUT_ERROR;
-    }
-
-    if(tmcRead() < 1) {
-        line = __LINE__;
-        goto GDS_OUT_ERROR;
-    }
-
-    devParms->timebasedelayscale = atof(device->buf);
-
-    if(devParms->modelSerie != 1) {
-        usleep(TMC_GDS_DELAY);
-
-        if(tmcWrite(":TIM:HREF:MODE?") != 15) {
-            line = __LINE__;
-            goto GDS_OUT_ERROR;
-        }
-
-        if(tmcRead() < 1) {
-            line = __LINE__;
-            goto GDS_OUT_ERROR;
-        }
-
-        if(!strcmp(device->buf, "CENT")) {
-            devParms->timebasehrefmode = 0;
-        } else if(!strcmp(device->buf, "TPOS")) {
-            devParms->timebasehrefmode = 1;
-        } else if(!strcmp(device->buf, "USER")) {
-            devParms->timebasehrefmode = 2;
-        } else {
-            line = __LINE__;
-            goto GDS_OUT_ERROR;
-        }
-
-        usleep(TMC_GDS_DELAY);
-
-        if(tmcWrite(":TIM:HREF:POS?") != 14) {
-            line = __LINE__;
-            goto GDS_OUT_ERROR;
-        }
-
-        if(tmcRead() < 1) {
-            line = __LINE__;
-            goto GDS_OUT_ERROR;
-        }
-
-        devParms->timebasehrefpos = atoi(device->buf);
-    }
-
-    usleep(TMC_GDS_DELAY);
-
-    if(tmcWrite(":TIM:MODE?") != 10) {
-        line = __LINE__;
-        goto GDS_OUT_ERROR;
-    }
-
-    if(tmcRead() < 1) {
-        line = __LINE__;
-        goto GDS_OUT_ERROR;
-    }
-
-    if(!strcmp(device->buf, "MAIN")) {
-        devParms->timebasemode = 0;
-    } else if(!strcmp(device->buf, "XY")) {
-        devParms->timebasemode = 1;
-    } else if(!strcmp(device->buf, "ROLL")) {
-        devParms->timebasemode = 2;
-    } else {
-        line = __LINE__;
-        goto GDS_OUT_ERROR;
-    }
-
-    if(devParms->modelSerie != 1) {
-        usleep(TMC_GDS_DELAY);
-
-        if(tmcWrite(":TIM:VERN?") != 10) {
-            line = __LINE__;
-            goto GDS_OUT_ERROR;
-        }
-
-        if(tmcRead() < 1) {
-            line = __LINE__;
-            goto GDS_OUT_ERROR;
-        }
-
-        if(!strcmp(device->buf, "0")) {
-            devParms->timebasevernier = 0;
-        } else if(!strcmp(device->buf, "1")) {
-            devParms->timebasevernier = 1;
-        } else {
-            line = __LINE__;
-            goto GDS_OUT_ERROR;
-        }
-    }
-
-    if((devParms->modelSerie != 1) && (devParms->modelSerie != 2)) {
-        usleep(TMC_GDS_DELAY);
-
-        if(tmcWrite(":TIM:XY1:DISP?") != 14) {
-            line = __LINE__;
-            goto GDS_OUT_ERROR;
-        }
-
-        if(tmcRead() < 1) {
-            line = __LINE__;
-            goto GDS_OUT_ERROR;
-        }
-
-        if(!strcmp(device->buf, "0")) {
-            devParms->timebasexy1display = 0;
-        } else if(!strcmp(device->buf, "1")) {
-            devParms->timebasexy1display = 1;
-        } else {
-            line = __LINE__;
-            goto GDS_OUT_ERROR;
-        }
-
-        usleep(TMC_GDS_DELAY);
-
-        if(tmcWrite(":TIM:XY2:DISP?") != 14) {
-            line = __LINE__;
-            goto GDS_OUT_ERROR;
-        }
-
-        if(tmcRead() < 1) {
-            line = __LINE__;
-            goto GDS_OUT_ERROR;
-        }
-
-        if(!strcmp(device->buf, "0")) {
-            devParms->timebasexy2display = 0;
-        } else if(!strcmp(device->buf, "1")) {
-            devParms->timebasexy2display = 1;
-        } else {
-            line = __LINE__;
-            goto GDS_OUT_ERROR;
-        }
-    }
-
-    usleep(TMC_GDS_DELAY);
-
-    if(tmcWrite(":TRIG:COUP?") != 11) {
-        line = __LINE__;
-        goto GDS_OUT_ERROR;
-    }
-
-    if(tmcRead() < 1) {
-        line = __LINE__;
-        goto GDS_OUT_ERROR;
-    }
-
-    if(!strcmp(device->buf, "AC")) {
-        devParms->triggercoupling = 0;
-    } else if(!strcmp(device->buf, "DC")) {
-        devParms->triggercoupling = 1;
-    } else if(!strcmp(device->buf, "LFR")) {
-        devParms->triggercoupling = 2;
-    } else if(!strcmp(device->buf, "HFR")) {
-        devParms->triggercoupling = 3;
-    } else {
-        line = __LINE__;
-        goto GDS_OUT_ERROR;
-    }
-
-    usleep(TMC_GDS_DELAY);
-
-    if(tmcWrite(":TRIG:SWE?") != 10) {
-        line = __LINE__;
-        goto GDS_OUT_ERROR;
-    }
-
-    if(tmcRead() < 1) {
-        line = __LINE__;
-        goto GDS_OUT_ERROR;
-    }
-
-    if(!strcmp(device->buf, "AUTO")) {
-        devParms->triggersweep = 0;
-    } else if(!strcmp(device->buf, "NORM")) {
-        devParms->triggersweep = 1;
-    } else if(!strcmp(device->buf, "SING")) {
-        devParms->triggersweep = 2;
-    } else {
-        line = __LINE__;
-        goto GDS_OUT_ERROR;
-    }
-
-    usleep(TMC_GDS_DELAY);
-
-    if(tmcWrite(":TRIG:MODE?") != 11) {
-        line = __LINE__;
-        goto GDS_OUT_ERROR;
-    }
-
-    if(tmcRead() < 1) {
-        line = __LINE__;
-        goto GDS_OUT_ERROR;
-    }
-
-    if(!strcmp(device->buf, "EDGE")) {
-        devParms->triggermode = 0;
-    } else if(!strcmp(device->buf, "PULS")) {
-        devParms->triggermode = 1;
-    } else if(!strcmp(device->buf, "SLOP")) {
-        devParms->triggermode = 2;
-    } else if(!strcmp(device->buf, "VID")) {
-        devParms->triggermode = 3;
-    } else if(!strcmp(device->buf, "PATT")) {
-        devParms->triggermode = 4;
-    } else if(!strcmp(device->buf, "RS232")) {
-        devParms->triggermode = 5;
-    } else if(!strcmp(device->buf, "IIC")) {
-        devParms->triggermode = 6;
-    } else if(!strcmp(device->buf, "SPI")) {
-        devParms->triggermode = 7;
-    } else if(!strcmp(device->buf, "CAN")) {
-        devParms->triggermode = 8;
-    } else if(!strcmp(device->buf, "USB")) {
-        devParms->triggermode = 9;
-    } else {
-        line = __LINE__;
-        goto GDS_OUT_ERROR;
-    }
-
-    usleep(TMC_GDS_DELAY);
-
-    if(tmcWrite(":TRIG:STAT?") != 11) {
-        line = __LINE__;
-        goto GDS_OUT_ERROR;
-    }
-
-    if(tmcRead() < 1) {
-        line = __LINE__;
-        goto GDS_OUT_ERROR;
-    }
-
-    if(!strcmp(device->buf, "TD")) {
-        devParms->triggerstatus = 0;
-    } else if(!strcmp(device->buf, "WAIT")) {
-        devParms->triggerstatus = 1;
-    } else if(!strcmp(device->buf, "RUN")) {
-        devParms->triggerstatus = 2;
-    } else if(!strcmp(device->buf, "AUTO")) {
-        devParms->triggerstatus = 3;
-    } else if(!strcmp(device->buf, "FIN")) {
-        devParms->triggerstatus = 4;
-    } else if(!strcmp(device->buf, "STOP")) {
-        devParms->triggerstatus = 5;
-    } else {
-        line = __LINE__;
-        goto GDS_OUT_ERROR;
-    }
-
-    usleep(TMC_GDS_DELAY);
-
-    if(tmcWrite(":TRIG:EDG:SLOP?") != 15) {
-        line = __LINE__;
-        goto GDS_OUT_ERROR;
-    }
-
-    if(tmcRead() < 1) {
-        line = __LINE__;
-        goto GDS_OUT_ERROR;
-    }
-
-    if(!strcmp(device->buf, "POS")) {
-        devParms->triggeredgeslope = 0;
-    } else if(!strcmp(device->buf, "NEG")) {
-        devParms->triggeredgeslope = 1;
-    } else if(!strcmp(device->buf, "RFAL")) {
-        devParms->triggeredgeslope = 2;
-    } else {
-        line = __LINE__;
-        goto GDS_OUT_ERROR;
-    }
-
-    usleep(TMC_GDS_DELAY);
-
-    if(tmcWrite(":TRIG:EDG:SOUR?") != 15) {
-        line = __LINE__;
-        goto GDS_OUT_ERROR;
-    }
-
-    if(tmcRead() < 1) {
-        line = __LINE__;
-        goto GDS_OUT_ERROR;
-    }
-
-    if(!strcmp(device->buf, "CHAN1")) {
-        devParms->triggeredgesource = 0;
-    } else if(!strcmp(device->buf, "CHAN2")) {
-        devParms->triggeredgesource = 1;
-    } else if(!strcmp(device->buf, "CHAN3")) {
-        devParms->triggeredgesource = 2;
-    } else if(!strcmp(device->buf, "CHAN4")) {
-        devParms->triggeredgesource = 3;
-    } else if(!strcmp(device->buf, "EXT")) {
-        devParms->triggeredgesource = 4;
-    } else if(!strcmp(device->buf, "EXT5")) {
-        devParms->triggeredgesource = 5;
-    } // DS1000Z: "AC", DS6000: "ACL" !!
-    else if((!strcmp(device->buf, "AC")) || (!strcmp(device->buf, "ACL"))) {
-        devParms->triggeredgesource = 6;
-    } else {
-        line = __LINE__;
-        goto GDS_OUT_ERROR;
-    }
-
-    for(chn = 0; chn < /*devParms->channelCnt*/ 4; chn++) { // FIXME
-        snprintf(str, 512, ":TRIG:EDG:SOUR CHAN%i", chn + 1);
-
-        usleep(TMC_GDS_DELAY);
-
-        if(tmcWrite(str) != 20) {
-            line = __LINE__;
-            goto GDS_OUT_ERROR;
-        }
-
-        usleep(TMC_GDS_DELAY);
-
-        if(tmcWrite(":TRIG:EDG:LEV?") != 14) {
-            line = __LINE__;
-            goto GDS_OUT_ERROR;
-        }
-
-        if(tmcRead() < 1) {
-            line = __LINE__;
-            goto GDS_OUT_ERROR;
-        }
-
-        devParms->triggeredgelevel[chn] = atof(device->buf);
-    }
-
-    if(devParms->triggeredgesource < 4) {
-        snprintf(str, 512, ":TRIG:EDG:SOUR CHAN%i", devParms->triggeredgesource + 1);
-
-        usleep(TMC_GDS_DELAY);
-
-        if(tmcWrite(str) != 20) {
-            line = __LINE__;
-            goto GDS_OUT_ERROR;
-        }
-    }
-
-    if(devParms->triggeredgesource == 4) {
-        usleep(TMC_GDS_DELAY);
-
-        if(tmcWrite(":TRIG:EDG:SOUR EXT") != 18) {
-            line = __LINE__;
-            goto GDS_OUT_ERROR;
-        }
-    }
-
-    if(devParms->triggeredgesource == 5) {
-        usleep(TMC_GDS_DELAY);
-
-        if(tmcWrite(":TRIG:EDG:SOUR EXT5") != 19) {
-            line = __LINE__;
-            goto GDS_OUT_ERROR;
-        }
-    }
-
-    if(devParms->triggeredgesource == 6) {
-        usleep(TMC_GDS_DELAY);
-
-        if(tmcWrite(":TRIG:EDG:SOUR AC") != 17) {
-            line = __LINE__;
-            goto GDS_OUT_ERROR;
-        }
-    }
-
-    usleep(TMC_GDS_DELAY);
-
-    if(tmcWrite(":TRIG:HOLD?") != 11) {
-        line = __LINE__;
-        goto GDS_OUT_ERROR;
-    }
-
-    if(tmcRead() < 1) {
-        line = __LINE__;
-        goto GDS_OUT_ERROR;
-    }
-
-    devParms->triggerholdoff = atof(device->buf);
-
-    usleep(TMC_GDS_DELAY);
-
-    if(tmcWrite(":ACQ:SRAT?") != 10) {
-        line = __LINE__;
-        goto GDS_OUT_ERROR;
-    }
-
-    if(tmcRead() < 1) {
-        line = __LINE__;
-        goto GDS_OUT_ERROR;
-    }
-
-    devParms->samplerate = atof(device->buf);
-
-    usleep(TMC_GDS_DELAY);
-
-    if(tmcWrite(":DISP:GRID?") != 11) {
-        line = __LINE__;
-        goto GDS_OUT_ERROR;
-    }
-
-    if(tmcRead() < 1) {
-        line = __LINE__;
-        goto GDS_OUT_ERROR;
-    }
-
-    if(!strcmp(device->buf, "NONE")) {
-        devParms->displaygrid = 0;
-    } else if(!strcmp(device->buf, "HALF")) {
-        devParms->displaygrid = 1;
-    } else if(!strcmp(device->buf, "FULL")) {
-        devParms->displaygrid = 2;
-    } else {
-        line = __LINE__;
-        goto GDS_OUT_ERROR;
-    }
-
-    usleep(TMC_GDS_DELAY);
-
-    if(tmcWrite(":MEAS:COUN:SOUR?") != 16) {
-        line = __LINE__;
-        goto GDS_OUT_ERROR;
-    }
-
-    if(tmcRead() < 1) {
-        line = __LINE__;
-        goto GDS_OUT_ERROR;
-    }
-
-    if(!strcmp(device->buf, "OFF")) {
-        devParms->countersrc = 0;
-    } else if(!strcmp(device->buf, "CHAN1")) {
-        devParms->countersrc = 1;
-    } else if(!strcmp(device->buf, "CHAN2")) {
-        devParms->countersrc = 2;
-    } else if(!strcmp(device->buf, "CHAN3")) {
-        devParms->countersrc = 3;
-    } else if(!strcmp(device->buf, "CHAN4")) {
-        devParms->countersrc = 4;
-    } else {
-        line = __LINE__;
-        goto GDS_OUT_ERROR;
-    }
-
-    usleep(TMC_GDS_DELAY);
-
-    if(tmcWrite(":DISP:TYPE?") != 11) {
-        line = __LINE__;
-        goto GDS_OUT_ERROR;
-    }
-
-    if(tmcRead() < 1) {
-        line = __LINE__;
-        goto GDS_OUT_ERROR;
-    }
-
-    if(!strcmp(device->buf, "VECT")) {
-        devParms->displaytype = 0;
-    } else if(!strcmp(device->buf, "DOTS")) {
-        devParms->displaytype = 1;
-    } else {
-        line = __LINE__;
-        goto GDS_OUT_ERROR;
-    }
-
-    usleep(TMC_GDS_DELAY);
-
-    if(tmcWrite(":ACQ:TYPE?") != 10) {
-        line = __LINE__;
-        goto GDS_OUT_ERROR;
-    }
-
-    if(tmcRead() < 1) {
-        line = __LINE__;
-        goto GDS_OUT_ERROR;
-    }
-
-    if(!strcmp(device->buf, "NORM")) {
-        devParms->acquiretype = 0;
-    } else if(!strcmp(device->buf, "AVER")) {
-        devParms->acquiretype = 1;
-    } else if(!strcmp(device->buf, "PEAK")) {
-        devParms->acquiretype = 2;
-    } else if(!strcmp(device->buf, "HRES")) {
-        devParms->acquiretype = 3;
-    } else {
-        line = __LINE__;
-        goto GDS_OUT_ERROR;
-    }
-
-    usleep(TMC_GDS_DELAY);
-
-    if(tmcWrite(":ACQ:AVER?") != 10) {
-        line = __LINE__;
-        goto GDS_OUT_ERROR;
-    }
-
-    if(tmcRead() < 1) {
-        line = __LINE__;
-        goto GDS_OUT_ERROR;
-    }
-
-    devParms->acquireaverages = atoi(device->buf);
-
-    usleep(TMC_GDS_DELAY);
-
-    if(tmcWrite(":DISP:GRAD:TIME?") != 16) {
-        line = __LINE__;
-        goto GDS_OUT_ERROR;
-    }
-
-    if(tmcRead() < 1) {
-        line = __LINE__;
-        goto GDS_OUT_ERROR;
-    }
-
-    if(!strcmp(device->buf, "MIN")) {
-        devParms->displaygrading = 0;
-    } else if(!strcmp(device->buf, "0.1")) {
-        devParms->displaygrading = 1;
-    } else if(!strcmp(device->buf, "0.2")) {
-        devParms->displaygrading = 2;
-    } else if(!strcmp(device->buf, "0.5")) {
-        devParms->displaygrading = 5;
-    } else if(!strcmp(device->buf, "1")) {
-        devParms->displaygrading = 10;
-    } else if(!strcmp(device->buf, "2")) {
-        devParms->displaygrading = 20;
-    } else if(!strcmp(device->buf, "5")) {
-        devParms->displaygrading = 50;
-    } else if(!strcmp(device->buf, "INF")) {
-        devParms->displaygrading = 10000;
-    } else {
-        line = __LINE__;
-        goto GDS_OUT_ERROR;
-    }
-
-    usleep(TMC_GDS_DELAY);
-
-    if(devParms->modelSerie != 1) {
-        if(tmcWrite(":CALC:FFT:SPL?") != 14) {
-            line = __LINE__;
-            goto GDS_OUT_ERROR;
-        }
-    } else if(tmcWrite(":MATH:FFT:SPL?") != 14) {
-        line = __LINE__;
-        goto GDS_OUT_ERROR;
-    }
-
-    if(tmcRead() < 1) {
-        line = __LINE__;
-        goto GDS_OUT_ERROR;
-    }
-
-    devParms->mathFftSplit = atoi(device->buf);
-
-    usleep(TMC_GDS_DELAY);
-
-    if(devParms->modelSerie != 1) {
-        if(tmcWrite(":CALC:MODE?") != 11) {
-            line = __LINE__;
-            goto GDS_OUT_ERROR;
-        }
-
-        if(tmcRead() < 1) {
-            line = __LINE__;
-            goto GDS_OUT_ERROR;
-        }
-
-        if(!strcmp(device->buf, "FFT"))
-            devParms->mathFft = 1;
-        else
-            devParms->mathFft = 0;
-    } else {
-        if(tmcWrite(":MATH:DISP?") != 11) {
-            line = __LINE__;
-            goto GDS_OUT_ERROR;
-        }
-
-        if(tmcRead() < 1) {
-            line = __LINE__;
-            goto GDS_OUT_ERROR;
-        }
-
-        devParms->mathFft = atoi(device->buf);
-
-        if(devParms->mathFft == 1) {
-            usleep(TMC_GDS_DELAY);
-
-            if(tmcWrite(":MATH:OPER?") != 11) {
-                line = __LINE__;
-                goto GDS_OUT_ERROR;
-            }
-
-            if(tmcRead() < 1) {
-                line = __LINE__;
-                goto GDS_OUT_ERROR;
-            }
-
-            if(!strcmp(device->buf, "FFT"))
-                devParms->mathFft = 1;
-            else
-                devParms->mathFft = 0;
-        }
-    }
-
-    usleep(TMC_GDS_DELAY);
-
-    if(devParms->modelSerie != 1) {
-        if(tmcWrite(":CALC:FFT:VSM?") != 14) {
-            line = __LINE__;
-            goto GDS_OUT_ERROR;
-        }
-    } else if(tmcWrite(":MATH:FFT:UNIT?") != 15) {
-        line = __LINE__;
-        goto GDS_OUT_ERROR;
-    }
-
-    if(tmcRead() < 1) {
-        line = __LINE__;
-        goto GDS_OUT_ERROR;
-    }
-
-    if(!strcmp(device->buf, "VRMS")) {
-        devParms->fftVScale = 0.5;
-
-        devParms->fftVOffset = -2.0;
-
-        devParms->mathFftUnit = 0;
-    } else {
-        devParms->fftVScale = 10.0;
-
-        devParms->fftVOffset = 20.0;
-
-        devParms->mathFftUnit = 1;
-    }
-
-    usleep(TMC_GDS_DELAY);
-
-    if(devParms->modelSerie != 1) {
-        if(tmcWrite(":CALC:FFT:SOUR?") != 15) {
-            line = __LINE__;
-            goto GDS_OUT_ERROR;
-        }
-    } else if(tmcWrite(":MATH:FFT:SOUR?") != 15) {
-        line = __LINE__;
-        goto GDS_OUT_ERROR;
-    }
-
-    if(tmcRead() < 1) {
-        line = __LINE__;
-        goto GDS_OUT_ERROR;
-    }
-
-    if(!strcmp(device->buf, "CHAN1"))
-        devParms->mathFftSrc = 0;
-    else if(!strcmp(device->buf, "CHAN2"))
-        devParms->mathFftSrc = 1;
-    else if(!strcmp(device->buf, "CHAN3"))
-        devParms->mathFftSrc = 2;
-    else if(!strcmp(device->buf, "CHAN4"))
-        devParms->mathFftSrc = 3;
-    else
-        devParms->mathFftSrc = 0;
-
-    usleep(TMC_GDS_DELAY);
-
-    devParms->currentScreenSf = 100.0 / devParms->timebasescale;
-
-    if(devParms->modelSerie != 1) {
-        if(tmcWrite(":CALC:FFT:HSP?") != 14) {
-            line = __LINE__;
-            goto GDS_OUT_ERROR;
-        }
-
-        if(tmcRead() < 1) {
-            line = __LINE__;
-            goto GDS_OUT_ERROR;
-        }
-
-        devParms->mathFftHscale = atof(device->buf);
-
-        //     if(tmc_write(":CALC:FFT:HSC?") != 14)
-        //     {
-        //       line = __LINE__;
-        //       goto GDS_OUT_ERROR;
-        //     }
-        //
-        //     if(tmc_read() < 1)
-        //     {
-        //       line = __LINE__;
-        //       goto GDS_OUT_ERROR;
-        //     }
-        //
-        //     switch(atoi(device->buf))
-        //     {
-        // //       case  0: devParms->math_fft_hscale = devParms->current_screen_sf / 80.0;
-        // //                break;
-        //       case  1: devParms->math_fft_hscale = devParms->current_screen_sf / 40.0;
-        //                break;
-        //       case  2: devParms->math_fft_hscale = devParms->current_screen_sf / 80.0;
-        //                break;
-        //       case  3: devParms->math_fft_hscale = devParms->current_screen_sf / 200.0;
-        //                break;
-        //       default: devParms->math_fft_hscale = devParms->current_screen_sf / 40.0;
-        //                break;
-        //     }
-    } else {
-        if(tmcWrite(":MATH:FFT:HSC?") != 14) {
-            line = __LINE__;
-            goto GDS_OUT_ERROR;
-        }
-
-        if(tmcRead() < 1) {
-            line = __LINE__;
-            goto GDS_OUT_ERROR;
-        }
-
-        devParms->mathFftHscale = atof(device->buf);
-    }
-
-    usleep(TMC_GDS_DELAY);
-
-    if(devParms->modelSerie != 1) {
-        if(tmcWrite(":CALC:FFT:HCEN?") != 15) {
-            line = __LINE__;
-            goto GDS_OUT_ERROR;
-        }
-    } else if(tmcWrite(":MATH:FFT:HCEN?") != 15) {
-        line = __LINE__;
-        goto GDS_OUT_ERROR;
-    }
-
-    if(tmcRead() < 1) {
-        line = __LINE__;
-        goto GDS_OUT_ERROR;
-    }
-
-    devParms->mathFftHcenter = atof(device->buf);
-
-    usleep(TMC_GDS_DELAY);
-
-    if(devParms->modelSerie != 1) {
-        if(tmcWrite(":CALC:FFT:VOFF?") != 15) {
-            line = __LINE__;
-            goto GDS_OUT_ERROR;
-        }
-
-        if(tmcRead() < 1) {
-            line = __LINE__;
-            goto GDS_OUT_ERROR;
-        }
-
-        devParms->fftVOffset = atof(device->buf);
-    } else {
-        if(tmcWrite(":MATH:OFFS?") != 11) {
-            line = __LINE__;
-            goto GDS_OUT_ERROR;
-        }
-
-        if(tmcRead() < 1) {
-            line = __LINE__;
-            goto GDS_OUT_ERROR;
-        }
-
-        devParms->fftVOffset = atof(device->buf);
-    }
-
-    usleep(TMC_GDS_DELAY);
-
-    if(devParms->modelSerie != 1) {
-        if(tmcWrite(":CALC:FFT:VSC?") != 14) {
-            line = __LINE__;
-            goto GDS_OUT_ERROR;
-        }
-
-        if(tmcRead() < 1) {
-            line = __LINE__;
-            goto GDS_OUT_ERROR;
-        }
-
-        if(devParms->mathFftUnit == 1)
-            devParms->fftVScale = atof(device->buf);
-        else
-            devParms->fftVScale = atof(device->buf) * devParms->chanscale[devParms->mathFftSrc];
-    } else {
-        if(tmcWrite(":MATH:SCAL?") != 11) {
-            line = __LINE__;
-            goto GDS_OUT_ERROR;
-        }
-
-        if(tmcRead() < 1) {
-            line = __LINE__;
-            goto GDS_OUT_ERROR;
-        }
-
-        devParms->fftVScale = atof(device->buf);
-    }
-
-    usleep(TMC_GDS_DELAY);
-
-    if(devParms->modelSerie != 1) {
-        if(tmcWrite(":BUS1:MODE?") != 11) {
-            line = __LINE__;
-            goto GDS_OUT_ERROR;
-        }
-    } else if(tmcWrite(":DEC1:MODE?") != 11) {
-        line = __LINE__;
-        goto GDS_OUT_ERROR;
-    }
-
-    if(tmcRead() < 1) {
-        line = __LINE__;
-        goto GDS_OUT_ERROR;
-    }
-
-    if(!strcmp(device->buf, "PAR"))
-        devParms->mathDecodeMode = 0;
-    else if(!strcmp(device->buf, "UART"))
-        devParms->mathDecodeMode = 1;
-    else if(!strcmp(device->buf, "RS232"))
-        devParms->mathDecodeMode = 1;
-    else if(!strcmp(device->buf, "SPI"))
-        devParms->mathDecodeMode = 2;
-    else if(!strcmp(device->buf, "IIC"))
-        devParms->mathDecodeMode = 3;
-
-    usleep(TMC_GDS_DELAY);
-
-    if(devParms->modelSerie != 1) {
-        if(tmcWrite(":BUS1:DISP?") != 11) {
-            line = __LINE__;
-            goto GDS_OUT_ERROR;
-        }
-    } else if(tmcWrite(":DEC1:DISP?") != 11) {
-        line = __LINE__;
-        goto GDS_OUT_ERROR;
-    }
-
-    if(tmcRead() < 1) {
-        line = __LINE__;
-        goto GDS_OUT_ERROR;
-    }
-
-    devParms->mathDecodeDisplay = atoi(device->buf);
-
-    usleep(TMC_GDS_DELAY);
-
-    if(devParms->modelSerie != 1) {
-        if(tmcWrite(":BUS1:FORM?") != 11) {
-            line = __LINE__;
-            goto GDS_OUT_ERROR;
-        }
-    } else if(tmcWrite(":DEC1:FORM?") != 11) {
-        line = __LINE__;
-        goto GDS_OUT_ERROR;
-    }
-
-    if(tmcRead() < 1) {
-        line = __LINE__;
-        goto GDS_OUT_ERROR;
-    }
-
-    if(!strcmp(device->buf, "HEX"))
-        devParms->mathDecodeFormat = 0;
-    else if(!strcmp(device->buf, "ASC"))
-        devParms->mathDecodeFormat = 1;
-    else if(!strcmp(device->buf, "DEC"))
-        devParms->mathDecodeFormat = 2;
-    else if(!strcmp(device->buf, "BIN"))
-        devParms->mathDecodeFormat = 3;
-    else if(!strcmp(device->buf, "LINE"))
-        devParms->mathDecodeFormat = 4;
-
-    usleep(TMC_GDS_DELAY);
-
-    if(devParms->modelSerie != 1) {
-        if(tmcWrite(":BUS1:SPI:OFFS?") != 15) {
-            line = __LINE__;
-            goto GDS_OUT_ERROR;
-        }
-    } else if(tmcWrite(":DEC1:POS?") != 10) {
-        line = __LINE__;
-        goto GDS_OUT_ERROR;
-    }
-
-    if(tmcRead() < 1) {
-        line = __LINE__;
-        goto GDS_OUT_ERROR;
-    }
-
-    devParms->mathDecodePos = atoi(device->buf);
-
-    usleep(TMC_GDS_DELAY);
-
-    if(devParms->modelSerie != 1) {
-        if(tmcWrite(":BUS1:SPI:MISO:THR?") != 19) {
-            line = __LINE__;
-            goto GDS_OUT_ERROR;
-        }
-    } else if(tmcWrite(":DEC1:THRE:CHAN1?") != 17) {
-        line = __LINE__;
-        goto GDS_OUT_ERROR;
-    }
-
-    if(tmcRead() < 1) {
-        line = __LINE__;
-        goto GDS_OUT_ERROR;
-    }
-
-    devParms->mathDecodeThreshold[0] = atof(device->buf);
-
-    usleep(TMC_GDS_DELAY);
-
-    if(devParms->modelSerie != 1) {
-        if(tmcWrite(":BUS1:SPI:MOSI:THR?") != 19) {
-            line = __LINE__;
-            goto GDS_OUT_ERROR;
-        }
-    } else if(tmcWrite(":DEC1:THRE:CHAN2?") != 17) {
-        line = __LINE__;
-        goto GDS_OUT_ERROR;
-    }
-
-    if(tmcRead() < 1) {
-        line = __LINE__;
-        goto GDS_OUT_ERROR;
-    }
-
-    devParms->mathDecodeThreshold[1] = atof(device->buf);
-
-    if(devParms->channelCnt == 4) {
-        usleep(TMC_GDS_DELAY);
-
-        if(devParms->modelSerie != 1) {
-            if(tmcWrite(":BUS1:SPI:SCLK:THR?") != 19) {
-                line = __LINE__;
-                goto GDS_OUT_ERROR;
-            }
-        } else if(tmcWrite(":DEC1:THRE:CHAN3?") != 17) {
-            line = __LINE__;
-            goto GDS_OUT_ERROR;
-        }
-
-        if(tmcRead() < 1) {
-            line = __LINE__;
-            goto GDS_OUT_ERROR;
-        }
-
-        devParms->mathDecodeThreshold[2] = atof(device->buf);
-
-        usleep(TMC_GDS_DELAY);
-
-        if(devParms->modelSerie != 1) {
-            if(tmcWrite(":BUS1:SPI:SS:THR?") != 17) {
-                line = __LINE__;
-                goto GDS_OUT_ERROR;
-            }
-        } else if(tmcWrite(":DEC1:THRE:CHAN4?") != 17) {
-            line = __LINE__;
-            goto GDS_OUT_ERROR;
-        }
-
-        if(tmcRead() < 1) {
-            line = __LINE__;
-            goto GDS_OUT_ERROR;
-        }
-
-        devParms->mathDecodeThreshold[3] = atof(device->buf);
-    }
-
-    if(devParms->modelSerie != 1) {
-        usleep(TMC_GDS_DELAY);
-
-        if(tmcWrite(":BUS1:RS232:TTHR?") != 17) {
-            line = __LINE__;
-            goto GDS_OUT_ERROR;
-        }
-
-        if(tmcRead() < 1) {
-            line = __LINE__;
-            goto GDS_OUT_ERROR;
-        }
-
-        //    devParms->math_decode_threshold_uart_tx = atof(device->buf);
-        devParms->mathDecodeThresholdUartTx = atof(device->buf)
-            * 10.0; // hack for firmware bug!
-
-        usleep(TMC_GDS_DELAY);
-
-        if(tmcWrite(":BUS1:RS232:RTHR?") != 17) {
-            line = __LINE__;
-            goto GDS_OUT_ERROR;
-        }
-
-        if(tmcRead() < 1) {
-            line = __LINE__;
-            goto GDS_OUT_ERROR;
-        }
-
-        //    devParms->math_decode_threshold_uart_rx = atof(device->buf);
-        devParms->mathDecodeThresholdUartRx = atof(device->buf)
-            * 10.0; // hack for firmware bug!
-    }
-
-    if(devParms->modelSerie == 1) {
-        usleep(TMC_GDS_DELAY);
-
-        if(tmcWrite(":DEC1:THRE:AUTO?") != 16) {
-            line = __LINE__;
-            goto GDS_OUT_ERROR;
-        }
-
-        if(tmcRead() < 1) {
-            line = __LINE__;
-            goto GDS_OUT_ERROR;
-        }
-
-        devParms->mathDecodeThresholdAuto = atoi(device->buf);
-    }
-
-    usleep(TMC_GDS_DELAY);
-
-    if(devParms->modelSerie != 1) {
-        if(tmcWrite(":BUS1:RS232:RX?") != 15) {
-            line = __LINE__;
-            goto GDS_OUT_ERROR;
-        }
-    } else if(tmcWrite(":DEC1:UART:RX?") != 14) {
-        line = __LINE__;
-        goto GDS_OUT_ERROR;
-    }
-
-    if(tmcRead() < 1) {
-        line = __LINE__;
-        goto GDS_OUT_ERROR;
-    }
-
-    if(!strcmp(device->buf, "CHAN1"))
-        devParms->mathDecodeUartRx = 1;
-    else if(!strcmp(device->buf, "CHAN2"))
-        devParms->mathDecodeUartRx = 2;
-    else if(!strcmp(device->buf, "CHAN3"))
-        devParms->mathDecodeUartRx = 3;
-    else if(!strcmp(device->buf, "CHAN4"))
-        devParms->mathDecodeUartRx = 4;
-    else if(!strcmp(device->buf, "OFF"))
-        devParms->mathDecodeUartRx = 0;
-    else
-        devParms->mathDecodeUartRx = 0;
-
-    usleep(TMC_GDS_DELAY);
-
-    if(devParms->modelSerie != 1) {
-        if(tmcWrite(":BUS1:RS232:TX?") != 15) {
-            line = __LINE__;
-            goto GDS_OUT_ERROR;
-        }
-    } else if(tmcWrite(":DEC1:UART:TX?") != 14) {
-        line = __LINE__;
-        goto GDS_OUT_ERROR;
-    }
-
-    if(tmcRead() < 1) {
-        line = __LINE__;
-        goto GDS_OUT_ERROR;
-    }
-
-    if(!strcmp(device->buf, "CHAN1"))
-        devParms->mathDecodeUartTx = 1;
-    else if(!strcmp(device->buf, "CHAN2"))
-        devParms->mathDecodeUartTx = 2;
-    else if(!strcmp(device->buf, "CHAN3"))
-        devParms->mathDecodeUartTx = 3;
-    else if(!strcmp(device->buf, "CHAN4"))
-        devParms->mathDecodeUartTx = 4;
-    else if(!strcmp(device->buf, "OFF"))
-        devParms->mathDecodeUartTx = 0;
-    else
-        devParms->mathDecodeUartTx = 0;
-
-    usleep(TMC_GDS_DELAY);
-
-    if(devParms->modelSerie != 1) {
-        if(tmcWrite(":BUS1:RS232:POL?") != 16) {
-            line = __LINE__;
-            goto GDS_OUT_ERROR;
-        }
-    } else if(tmcWrite(":DEC1:UART:POL?") != 15) {
-        line = __LINE__;
-        goto GDS_OUT_ERROR;
-    }
-
-    if(tmcRead() < 1) {
-        line = __LINE__;
-        goto GDS_OUT_ERROR;
-    }
-
-    if(!strcmp(device->buf, "POS"))
-        devParms->mathDecodeUartPol = 1;
-    else if(!strcmp(device->buf, "NEG"))
-        devParms->mathDecodeUartPol = 0;
-
-    usleep(TMC_GDS_DELAY);
-
-    if(devParms->modelSerie != 1) {
-        if(tmcWrite(":BUS1:RS232:END?") != 16) {
-            line = __LINE__;
-            goto GDS_OUT_ERROR;
-        }
-    } else if(tmcWrite(":DEC1:UART:END?") != 15) {
-        line = __LINE__;
-        goto GDS_OUT_ERROR;
-    }
-
-    if(tmcRead() < 1) {
-        line = __LINE__;
-        goto GDS_OUT_ERROR;
-    }
-
-    if(!strcmp(device->buf, "MSB"))
-        devParms->mathDecodeUartPol = 1;
-    else if(!strcmp(device->buf, "LSB"))
-        devParms->mathDecodeUartPol = 0;
-
-    usleep(TMC_GDS_DELAY);
-
-    if(devParms->modelSerie != 1) {
-        if(tmcWrite(":BUS1:RS232:BAUD?") != 17) {
-            line = __LINE__;
-            goto GDS_OUT_ERROR;
-        }
-    } else if(tmcWrite(":DEC1:UART:BAUD?") != 16) {
-        line = __LINE__;
-        goto GDS_OUT_ERROR;
-    }
-
-    if(tmcRead() < 1) {
-        line = __LINE__;
-        goto GDS_OUT_ERROR;
-    }
-
-    // FIXME  DEC1:UART:BAUD? can return also "USER" instead of a number!
-    devParms->mathDecodeUartBaud = atoi(device->buf);
-
-    usleep(TMC_GDS_DELAY);
-
-    if(devParms->modelSerie != 1) {
-        if(tmcWrite(":BUS1:RS232:DBIT?") != 17) {
-            line = __LINE__;
-            goto GDS_OUT_ERROR;
-        }
-    } else if(tmcWrite(":DEC1:UART:WIDT?") != 16) {
-        line = __LINE__;
-        goto GDS_OUT_ERROR;
-    }
-
-    if(tmcRead() < 1) {
-        line = __LINE__;
-        goto GDS_OUT_ERROR;
+            errNum = 0;
+            return 0;
+        }();
+    } catch(const std::exception* ex) {
+        strncat(device->buf, ex->what(), 512);
+        errLine = __LINE__;
+    }
+
+    if(errLine > 0) {
+        char str[512]{};
+
+        snprintf(errStr,
+            4096,
+            "An error occurred while reading settings from device.\n"
+            "Command sent: %s\n"
+            "Received: %s\n"
+            "File %s line %i",
+            str, device->buf, __FILE__, errLine);
+        errNum = -1;
     }
-
-    devParms->mathDecodeUartWidth = atoi(device->buf);
-
-    usleep(TMC_GDS_DELAY);
-
-    if(devParms->modelSerie != 1) {
-        if(tmcWrite(":BUS1:RS232:SBIT?") != 17) {
-            line = __LINE__;
-            goto GDS_OUT_ERROR;
-        }
-    } else if(tmcWrite(":DEC1:UART:STOP?") != 16) {
-        line = __LINE__;
-        goto GDS_OUT_ERROR;
-    }
-
-    if(tmcRead() < 1) {
-        line = __LINE__;
-        goto GDS_OUT_ERROR;
-    }
-
-    if(!strcmp(device->buf, "1"))
-        devParms->mathDecodeUartStop = 0;
-    else if(!strcmp(device->buf, "1.5"))
-        devParms->mathDecodeUartStop = 1;
-    else if(!strcmp(device->buf, "2"))
-        devParms->mathDecodeUartStop = 2;
-
-    usleep(TMC_GDS_DELAY);
-
-    if(devParms->modelSerie != 1) {
-        if(tmcWrite(":BUS1:RS232:PAR?") != 16) {
-            line = __LINE__;
-            goto GDS_OUT_ERROR;
-        }
-    } else if(tmcWrite(":DEC1:UART:PAR?") != 15) {
-        line = __LINE__;
-        goto GDS_OUT_ERROR;
-    }
-
-    if(tmcRead() < 1) {
-        line = __LINE__;
-        goto GDS_OUT_ERROR;
-    }
-
-    if(!strcmp(device->buf, "ODD"))
-        devParms->mathDecodeUartPar = 1;
-    else if(!strcmp(device->buf, "EVEN"))
-        devParms->mathDecodeUartPar = 2;
-    else if(!strcmp(device->buf, "NONE"))
-        devParms->mathDecodeUartPar = 0;
-    else
-        devParms->mathDecodeUartPar = 0;
-
-    usleep(TMC_GDS_DELAY);
-
-    if(devParms->modelSerie != 1) {
-        if(tmcWrite(":BUS1:SPI:SCLK:SOUR?") != 20) {
-            line = __LINE__;
-            goto GDS_OUT_ERROR;
-        }
-    } else if(tmcWrite(":DEC1:SPI:CLK?") != 14) {
-        line = __LINE__;
-        goto GDS_OUT_ERROR;
-    }
-
-    if(tmcRead() < 1) {
-        line = __LINE__;
-        goto GDS_OUT_ERROR;
-    }
-
-    if(!strcmp(device->buf, "CHAN1"))
-        devParms->mathDecodeSpiClk = 0;
-    else if(!strcmp(device->buf, "CHAN2"))
-        devParms->mathDecodeSpiClk = 1;
-    else if(!strcmp(device->buf, "CHAN3"))
-        devParms->mathDecodeSpiClk = 2;
-    else if(!strcmp(device->buf, "CHAN4"))
-        devParms->mathDecodeSpiClk = 3;
-
-    usleep(TMC_GDS_DELAY);
-
-    if(devParms->modelSerie != 1) {
-        if(tmcWrite(":BUS1:SPI:MISO:SOUR?") != 20) {
-            line = __LINE__;
-            goto GDS_OUT_ERROR;
-        }
-    } else if(tmcWrite(":DEC1:SPI:MISO?") != 15) {
-        line = __LINE__;
-        goto GDS_OUT_ERROR;
-    }
-
-    if(tmcRead() < 1) {
-        line = __LINE__;
-        goto GDS_OUT_ERROR;
-    }
-
-    if(!strcmp(device->buf, "CHAN1"))
-        devParms->mathDecodeSpiMiso = 1;
-    else if(!strcmp(device->buf, "CHAN2"))
-        devParms->mathDecodeSpiMiso = 2;
-    else if(!strcmp(device->buf, "CHAN3"))
-        devParms->mathDecodeSpiMiso = 3;
-    else if(!strcmp(device->buf, "CHAN4"))
-        devParms->mathDecodeSpiMiso = 4;
-    else if(!strcmp(device->buf, "OFF"))
-        devParms->mathDecodeSpiMiso = 0;
-    else
-        devParms->mathDecodeSpiMiso = 0;
-
-    usleep(TMC_GDS_DELAY);
-
-    if(devParms->modelSerie != 1) {
-        if(tmcWrite(":BUS1:SPI:MOSI:SOUR?") != 20) {
-            line = __LINE__;
-            goto GDS_OUT_ERROR;
-        }
-    } else if(tmcWrite(":DEC1:SPI:MOSI?") != 15) {
-        line = __LINE__;
-        goto GDS_OUT_ERROR;
-    }
-
-    if(tmcRead() < 1) {
-        line = __LINE__;
-        goto GDS_OUT_ERROR;
-    }
-
-    if(!strcmp(device->buf, "CHAN1"))
-        devParms->mathDecodeSpiMosi = 1;
-    else if(!strcmp(device->buf, "CHAN2"))
-        devParms->mathDecodeSpiMosi = 2;
-    else if(!strcmp(device->buf, "CHAN3"))
-        devParms->mathDecodeSpiMosi = 3;
-    else if(!strcmp(device->buf, "CHAN4"))
-        devParms->mathDecodeSpiMosi = 4;
-    else if(!strcmp(device->buf, "OFF"))
-        devParms->mathDecodeSpiMosi = 0;
-    else
-        devParms->mathDecodeSpiMosi = 0;
-
-    usleep(TMC_GDS_DELAY);
-
-    if(devParms->modelSerie != 1) {
-        if(tmcWrite(":BUS1:SPI:SS:SOUR?") != 18) {
-            line = __LINE__;
-            goto GDS_OUT_ERROR;
-        }
-    } else if(tmcWrite(":DEC1:SPI:CS?") != 13) {
-        line = __LINE__;
-        goto GDS_OUT_ERROR;
-    }
-
-    if(tmcRead() < 1) {
-        line = __LINE__;
-        goto GDS_OUT_ERROR;
-    }
-
-    if(!strcmp(device->buf, "CHAN1"))
-        devParms->mathDecodeSpiCs = 1;
-    else if(!strcmp(device->buf, "CHAN2"))
-        devParms->mathDecodeSpiCs = 2;
-    else if(!strcmp(device->buf, "CHAN3"))
-        devParms->mathDecodeSpiCs = 3;
-    else if(!strcmp(device->buf, "CHAN4"))
-        devParms->mathDecodeSpiCs = 4;
-    else if(!strcmp(device->buf, "OFF"))
-        devParms->mathDecodeSpiCs = 0;
-    else
-        devParms->mathDecodeSpiCs = 0;
-
-    usleep(TMC_GDS_DELAY);
-
-    if(devParms->modelSerie != 1) {
-        if(tmcWrite(":BUS1:SPI:SS:POL?") != 17) {
-            line = __LINE__;
-            goto GDS_OUT_ERROR;
-        }
-    } else if(tmcWrite(":DEC1:SPI:SEL?") != 14) {
-        line = __LINE__;
-        goto GDS_OUT_ERROR;
-    }
-
-    if(tmcRead() < 1) {
-        line = __LINE__;
-        goto GDS_OUT_ERROR;
-    }
-
-    if(!strcmp(device->buf, "NCS"))
-        devParms->mathDecodeSpiSelect = 0;
-    else if(!strcmp(device->buf, "CS"))
-        devParms->mathDecodeSpiSelect = 1;
-    else if(!strcmp(device->buf, "NEG"))
-        devParms->mathDecodeSpiSelect = 0;
-    else if(!strcmp(device->buf, "POS"))
-        devParms->mathDecodeSpiSelect = 1;
-
-    if(devParms->modelSerie == 1) {
-        usleep(TMC_GDS_DELAY);
-
-        if(tmcWrite(":DEC1:SPI:MODE?") != 15) {
-            line = __LINE__;
-            goto GDS_OUT_ERROR;
-        }
-
-        if(tmcRead() < 1) {
-            line = __LINE__;
-            goto GDS_OUT_ERROR;
-        }
-
-        if(!strcmp(device->buf, "TIM"))
-            devParms->mathDecodeSpiMode = 0;
-        else if(!strcmp(device->buf, "CS"))
-            devParms->mathDecodeSpiMode = 1;
-    }
-
-    if(devParms->modelSerie == 1) {
-        usleep(TMC_GDS_DELAY);
-
-        if(tmcWrite(":DEC1:SPI:TIM?") != 14) {
-            line = __LINE__;
-            goto GDS_OUT_ERROR;
-        }
-
-        if(tmcRead() < 1) {
-            line = __LINE__;
-            goto GDS_OUT_ERROR;
-        }
-
-        devParms->mathDecodeSpiTimeout = atof(device->buf);
-    }
-
-    usleep(TMC_GDS_DELAY);
-
-    if(devParms->modelSerie != 1) {
-        if(tmcWrite(":BUS1:SPI:MOSI:POL?") != 19) {
-            line = __LINE__;
-            goto GDS_OUT_ERROR;
-        }
-    } else if(tmcWrite(":DEC1:SPI:POL?") != 14) {
-        line = __LINE__;
-        goto GDS_OUT_ERROR;
-    }
-
-    if(tmcRead() < 1) {
-        line = __LINE__;
-        goto GDS_OUT_ERROR;
-    }
-
-    if(!strcmp(device->buf, "NEG"))
-        devParms->mathDecodeSpiPol = 0;
-    else if(!strcmp(device->buf, "POS"))
-        devParms->mathDecodeSpiPol = 1;
-
-    usleep(TMC_GDS_DELAY);
-
-    if(devParms->modelSerie != 1) {
-        if(tmcWrite(":BUS1:SPI:SCLK:SLOP?") != 20) {
-            line = __LINE__;
-            goto GDS_OUT_ERROR;
-        }
-    } else if(tmcWrite(":DEC1:SPI:EDGE?") != 15) {
-        line = __LINE__;
-        goto GDS_OUT_ERROR;
-    }
-
-    if(tmcRead() < 1) {
-        line = __LINE__;
-        goto GDS_OUT_ERROR;
-    }
-
-    if(!strcmp(device->buf, "NEG"))
-        devParms->mathDecodeSpiEdge = 0;
-    else if(!strcmp(device->buf, "POS"))
-        devParms->mathDecodeSpiEdge = 1;
-    else if(!strcmp(device->buf, "FALL"))
-        devParms->mathDecodeSpiEdge = 0;
-    else if(!strcmp(device->buf, "RISE"))
-        devParms->mathDecodeSpiEdge = 1;
-
-    usleep(TMC_GDS_DELAY);
-
-    if(devParms->modelSerie != 1) {
-        if(tmcWrite(":BUS1:SPI:DBIT?") != 15) {
-            line = __LINE__;
-            goto GDS_OUT_ERROR;
-        }
-    } else if(tmcWrite(":DEC1:SPI:WIDT?") != 15) {
-        line = __LINE__;
-        goto GDS_OUT_ERROR;
-    }
-
-    if(tmcRead() < 1) {
-        line = __LINE__;
-        goto GDS_OUT_ERROR;
-    }
-
-    devParms->mathDecodeSpiWidth = atoi(device->buf);
-
-    usleep(TMC_GDS_DELAY);
-
-    if(devParms->modelSerie != 1) {
-        if(tmcWrite(":BUS1:SPI:END?") != 14) {
-            line = __LINE__;
-            goto GDS_OUT_ERROR;
-        }
-    } else if(tmcWrite(":DEC1:SPI:END?") != 14) {
-        line = __LINE__;
-        goto GDS_OUT_ERROR;
-    }
-
-    if(tmcRead() < 1) {
-        line = __LINE__;
-        goto GDS_OUT_ERROR;
-    }
-
-    if(!strcmp(device->buf, "LSB"))
-        devParms->mathDecodeSpiEnd = 0;
-    else if(!strcmp(device->buf, "MSB"))
-        devParms->mathDecodeSpiEnd = 1;
-
-    usleep(TMC_GDS_DELAY);
-
-    if(devParms->modelSerie == 1) {
-        if(tmcWrite(":FUNC:WREC:ENAB?") != 16) {
-            line = __LINE__;
-            goto GDS_OUT_ERROR;
-        }
-
-        if(tmcRead() < 1) {
-            line = __LINE__;
-            goto GDS_OUT_ERROR;
-        }
-
-        if(!strcmp(device->buf, "1")) {
-            devParms->funcWrecEnable = 1;
-        } else if(!strcmp(device->buf, "0")) {
-            devParms->funcWrecEnable = 0;
-        } else {
-            line = __LINE__;
-            goto GDS_OUT_ERROR;
-        }
-    } else {
-        if(tmcWrite(":FUNC:WRM?") != 10) {
-            line = __LINE__;
-            goto GDS_OUT_ERROR;
-        }
-
-        if(tmcRead() < 1) {
-            line = __LINE__;
-            goto GDS_OUT_ERROR;
-        }
-
-        if(!strcmp(device->buf, "REC")) {
-            devParms->funcWrecEnable = 1;
-        } else if(!strcmp(device->buf, "PLAY")) {
-            devParms->funcWrecEnable = 2;
-        } else if(!strcmp(device->buf, "OFF")) {
-            devParms->funcWrecEnable = 0;
-        } else {
-            line = __LINE__;
-            goto GDS_OUT_ERROR;
-        }
-    }
-
-    if(devParms->funcWrecEnable) {
-        usleep(TMC_GDS_DELAY);
-
-        if(tmcWrite(":FUNC:WREC:FEND?") != 16) {
-            line = __LINE__;
-            goto GDS_OUT_ERROR;
-        }
-
-        if(tmcRead() < 1) {
-            line = __LINE__;
-            goto GDS_OUT_ERROR;
-        }
-
-        devParms->funcWrecFend = atoi(device->buf);
-
-        usleep(TMC_GDS_DELAY);
-
-        if(tmcWrite(":FUNC:WREC:FMAX?") != 16) {
-            line = __LINE__;
-            goto GDS_OUT_ERROR;
-        }
-
-        if(tmcRead() < 1) {
-            line = __LINE__;
-            goto GDS_OUT_ERROR;
-        }
-
-        devParms->funcWrecFmax = atoi(device->buf);
-
-        usleep(TMC_GDS_DELAY);
-
-        if(tmcWrite(":FUNC:WREC:FINT?") != 16) {
-            line = __LINE__;
-            goto GDS_OUT_ERROR;
-        }
-
-        if(tmcRead() < 1) {
-            line = __LINE__;
-            goto GDS_OUT_ERROR;
-        }
-
-        devParms->funcWrecFintval = atof(device->buf);
-
-        usleep(TMC_GDS_DELAY);
-
-        if(tmcWrite(":FUNC:WREP:FST?") != 15) {
-            line = __LINE__;
-            goto GDS_OUT_ERROR;
-        }
-
-        if(tmcRead() < 1) {
-            line = __LINE__;
-            goto GDS_OUT_ERROR;
-        }
-
-        devParms->funcWplayFstart = atoi(device->buf);
-
-        usleep(TMC_GDS_DELAY);
-
-        if(tmcWrite(":FUNC:WREP:FEND?") != 16) {
-            line = __LINE__;
-            goto GDS_OUT_ERROR;
-        }
-
-        if(tmcRead() < 1) {
-            line = __LINE__;
-            goto GDS_OUT_ERROR;
-        }
-
-        devParms->funcWplayFend = atoi(device->buf);
-
-        usleep(TMC_GDS_DELAY);
-
-        if(tmcWrite(":FUNC:WREP:FMAX?") != 16) {
-            line = __LINE__;
-            goto GDS_OUT_ERROR;
-        }
-
-        if(tmcRead() < 1) {
-            line = __LINE__;
-            goto GDS_OUT_ERROR;
-        }
-
-        devParms->funcWplayFmax = atoi(device->buf);
-
-        usleep(TMC_GDS_DELAY);
-
-        if(tmcWrite(":FUNC:WREP:FINT?") != 16) {
-            line = __LINE__;
-            goto GDS_OUT_ERROR;
-        }
-
-        if(tmcRead() < 1) {
-            line = __LINE__;
-            goto GDS_OUT_ERROR;
-        }
-
-        devParms->funcWplayFintval = atof(device->buf);
-
-        usleep(TMC_GDS_DELAY);
-
-        if(tmcWrite(":FUNC:WREP:FCUR?") != 16) {
-            line = __LINE__;
-            goto GDS_OUT_ERROR;
-        }
-
-        if(tmcRead() < 1) {
-            line = __LINE__;
-            goto GDS_OUT_ERROR;
-        }
-
-        devParms->funcWplayFcur = atoi(device->buf);
-    }
-
-    errNum = 0;
-
-    return;
-
-GDS_OUT_ERROR:
-
-    snprintf(errStr,
-        4096,
-        "An error occurred while reading settings from device.\n"
-        "Command sent: %s\n"
-        "Received: %s\n"
-        "File %s line %i",
-        str,
-        device->buf,
-        __FILE__,
-        line);
-
-    errNum = -1;
-
-    return;
 }
